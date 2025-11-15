@@ -69,5 +69,12 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
-  }
+  },
+  "lint-staged": {
+  "*.{js,ts,jsx,tsx}": [
+      "biome check --write",
+      "biome format --write"
+    ]
+}
+
 }

@@ -10,5 +10,10 @@
 		"enabled": true,
 		"indentStyle": "tab",
 		"lineWidth": 80
-	}
+	},
+	  "javascript": {
+    "parser": {
+      "unsafeParameterDecoratorsEnabled": true
+    }
+  }
 }

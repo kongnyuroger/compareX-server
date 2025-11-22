@@ -31,9 +31,6 @@ export class User extends Document {
 
 export const UserSchema = SchemaFactory.createForClass(User);
 
-UserSchema.index({ username: 1 }, { unique: true });
-UserSchema.index({ email: 1 }, { unique: true });
-
 UserSchema.set("toJSON", {
 	transform: (_doc, ret: any, _options?: any) => {
 		delete ret.passwordHash;

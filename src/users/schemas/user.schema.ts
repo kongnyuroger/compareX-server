@@ -25,7 +25,11 @@ export class User extends Document {
 	})
 	email: string;
 
-	@Prop({ required: true, select: false })
+	@Prop({
+		required: true,
+		select: false,
+		minLength: 6,
+	})
 	password: string;
 }
 

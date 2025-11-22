@@ -38,7 +38,11 @@ export class UsersService {
 				"User with this email or username already exists.",
 			);
 		}
-
+		if (dto.password.length <= 6) {
+			throw new ForbiddenException(
+				"Password must be longer than 6 characters.",
+			);
+		}
 		const hashedPassword = await this.hashPassword(dto.password);
 
 		const newUser = new this._userModel({

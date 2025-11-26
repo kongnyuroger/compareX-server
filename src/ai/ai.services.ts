@@ -21,7 +21,7 @@ export class AiService {
 					{
 						role: "system",
 						content:
-							"Expand the product search query into 3–5 alternative variations. Return ONLY a list. No explanations.",
+							"Expand the product search query into 3–5 alternative variations. Return ONLY a list with no bullet points . No explanations.",
 					},
 					{ role: "user", content: query },
 				],
@@ -55,10 +55,29 @@ export class AiService {
               No markdown.
               No code fences.
               No explanations.
+
+              Your task is to rank the provided 'products' based on two criteria:
+              1. **Relevance**: How well the product name/category matches the user's 'query'.
+              2. **Price**: Products with lower prices should generally rank higher than equally relevant, more expensive items.
+              
+              Return an array named 'ranked' containing the FULL product objects from the input,
+              but sorted in descending order according to the blended ranking score (highest score first).
+              The resulting product objects MUST be identical to the input objects, plus an added 'score' field.
+
               JSON format:
               {
                 "ranked": [
-                  { "title": "...", "score": 0.0 }
+                  { 
+                    "id": 12,
+                    "name": "Xbox Series X Console",
+                    "price": 499.99,
+                    "tag": "Limited Stock",
+                    "tagColor": "bg-orange-100 text-orange-700",
+                    "image": "...", 
+                    "stores": ["ebay", "jumia"],
+                    "score": 0.95 // <-- REQUIRED: A blended ranking score (0.0 to 1.0)
+                  },
+                  // ... other ranked products
                 ]
               }
           `,

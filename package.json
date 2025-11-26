@@ -21,6 +21,7 @@
 		"prepare": "husky"
 	},
 	"dependencies": {
+		"@ai-sdk/openai": "^2.0.72",
 		"@nestjs/common": "^11.1.9",
 		"@nestjs/config": "^4.0.2",
 		"@nestjs/core": "^11.1.9",
@@ -33,7 +34,8 @@
 		"class-validator": "^0.14.2",
 		"dotenv": "^17.2.3",
 		"express": "^5.1.0",
-		"mongoose": "^9.0.0",
+		"mongoose": "^7.0.0",
+		"openai": "^6.9.1",
 		"passport": "^0.7.0",
 		"passport-jwt": "^4.0.1",
 		"reflect-metadata": "^0.2.2",

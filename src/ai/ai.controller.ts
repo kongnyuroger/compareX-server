@@ -1,23 +1,23 @@
-import { Controller, Get, Query } from "@nestjs/common";
-import type { AiService } from "./ai.services.";
-
+import { BadRequestException, Controller, Get, Query } from "@nestjs/common";
+import type { AiService } from "./ai.services";
+import { MOCK_PRODUCTS } from "./constants/mock-products";
 @Controller("ai")
 export class AiController {
 	constructor(private readonly aiService: AiService) {}
 
 	@Get("expand")
-	async expand(@Query("q") query: string) {
+	async expand(@Query("q") query: string): Promise<any> {
+		if (!query || query.trim().length === 0) {
+			throw new BadRequestException("Query parameter 'q' is required");
+		}
 		return this.aiService.expandQuery(query);
 	}
 
 	@Get("rank")
-	async rank(@Query("q") query: string) {
-		const mockProducts = [
-			{ title: "Blue Tote Bag", price: 30 },
-			{ title: "Deming Tote Bag", price: 28 },
-			{ title: "Leather Handbag", price: 15 },
-		];
-
-		return this.aiService.rankProducts(query, mockProducts);
+	async rank(@Query("q") query: string): Promise<any> {
+		if (!query || query.trim().length === 0) {
+			throw new BadRequestException("Query parameter 'q' is required");
+		}
+		return this.aiService.rankProducts(query, MOCK_PRODUCTS);
 	}
 }

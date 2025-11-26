@@ -27,8 +27,11 @@ export class AiService {
 				],
 			});
 
-			const content = response.choices[0].message.content || "";
-
+			const choice = response.choices[0];
+			if (!choice?.message?.content) {
+				return [query];
+			}
+			const content = choice.message.content;
 			return content
 				.split("\n")
 				.map((item) => item.replace(/^\d+\.\s*/, "").trim())
@@ -78,8 +81,11 @@ export class AiService {
 			// Parse safely
 			return JSON.parse(content);
 		} catch (error) {
-			console.error(" OpenAI JSON Parse Error:", error.message);
-			console.error("Raw content from model:", error.response?.data || "");
+			if (error instanceof SyntaxError) {
+				console.error("JSON Parse Error:", error.message);
+			} else {
+				console.error("OpenAI API Error:", error.message);
+			}
 			throw new InternalServerErrorException("AI ranking failed");
 		}
 	}

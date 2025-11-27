@@ -9,6 +9,7 @@ import {
 	UseGuards,
 } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
+import { Throttle } from "@nestjs/throttler";
 import type { Request } from "express";
 import type { AuthDto } from "../users/dto/auth.dto";
 import type { LoginDto } from "../users/dto/login.dto";
@@ -26,12 +27,14 @@ interface UserRequest extends Request {
 export class UsersController {
 	constructor(private readonly usersService: UsersService) {}
 
+	@Throttle({ default: { limit: 3, ttl: 60000 } })
 	@Post("register")
 	@HttpCode(HttpStatus.CREATED)
 	register(@Body() _dto: AuthDto) {
 		return this.usersService.register(_dto);
 	}
 
+	@Throttle({ default: { limit: 3, ttl: 60000 } })
 	@Post("login")
 	@HttpCode(HttpStatus.OK)
 	login(@Body() _dto: LoginDto) {

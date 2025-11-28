@@ -1,5 +1,5 @@
 import { BadRequestException, Controller, Get, Query } from "@nestjs/common";
-import type { AiService } from "./ai.services";
+import { AiService } from "./ai.services";
 import { MOCK_PRODUCTS } from "./constants/mock-products";
 @Controller("ai")
 export class AiController {

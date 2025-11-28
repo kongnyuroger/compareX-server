@@ -17,7 +17,7 @@ export const MOCK_PRODUCTS = [
 		tag: "Cheapest",
 		tagColor: "bg-blue-100 text-blue-700",
 		image:
-			"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQp0frZ-jb7zKkbZx40gW31D5KDTdA89h83Gg&s", // Placeholder for iPhone 13 Case (Blue)
+			"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQp0frZ-jb7zKkbZx40gW31D5KDTdA89h83Gg&s",
 		stores: ["amazon", "jumia"],
 		category: "phone",
 	},
@@ -39,7 +39,7 @@ export const MOCK_PRODUCTS = [
 		price: 549.99,
 		tag: "Popular",
 		tagColor: "bg-purple-100 text-purple-700",
-		image: "https://m.media-amazon.com/images/I/71nP6lTogjL._AC_SL1500_.jpg", // Random image for Dell Inspiron
+		image: "https://m.media-amazon.com/images/I/71nP6lTogjL._AC_SL1500_.jpg",
 		stores: ["amazon", "walmart"],
 		category: "Laptops",
 	},
@@ -50,7 +50,7 @@ export const MOCK_PRODUCTS = [
 		tag: "Best Value",
 		tagColor: "bg-yellow-100 text-yellow-700",
 		image:
-			"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ-g6ZWExP8t8Xl2bG0E4cM4mxjJYZ525ZrLQ&s", // Random image for MacBook Air
+			"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ-g6ZWExP8t8Xl2bG0E4cM4mxjJYZ525ZrLQ&s",
 		stores: ["jumia", "amazon"],
 		category: "Laptops",
 	},
@@ -63,7 +63,7 @@ export const MOCK_PRODUCTS = [
 		tag: "Trending",
 		tagColor: "bg-red-100 text-red-700",
 		image:
-			"https://m.media-amazon.com/images/I/61UgZSYRllL._AC_UF894,1000_QL80_.jpg", // Random image for Sony Headphones
+			"https://m.media-amazon.com/images/I/61UgZSYRllL._AC_UF894,1000_QL80_.jpg",
 		stores: ["ebay", "walmart"],
 		category: "heardphones",
 	},
@@ -74,7 +74,7 @@ export const MOCK_PRODUCTS = [
 		tag: "Top Rated",
 		tagColor: "bg-green-100 text-green-700",
 		image:
-			"https://www.apple.com/v/airpods-pro/r/images/overview/welcome/hero__b0eal3mn03ua_large.jpg", // Random image for AirPods Pro
+			"https://www.apple.com/v/airpods-pro/r/images/overview/welcome/hero__b0eal3mn03ua_large.jpg",
 		stores: ["amazon", "jumia"],
 		category: "heardphones",
 	},
@@ -87,7 +87,7 @@ export const MOCK_PRODUCTS = [
 		tag: "New",
 		tagColor: "bg-blue-100 text-blue-700",
 		image:
-			"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT_7AaNNNMdVtNXMCCRxQZ0f8vVlD9JJtjT3g&s", // Random image for Apple Watch
+			"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT_7AaNNNMdVtNXMCCRxQZ0f8vVlD9JJtjT3g&s",
 		stores: ["jumia", "ebay"],
 		category: "smartwatches",
 	},
@@ -98,7 +98,7 @@ export const MOCK_PRODUCTS = [
 		tag: "Best Deal",
 		tagColor: "bg-green-100 text-green-700",
 		image:
-			"https://fonexpress.net/wp-content/uploads/2023/09/WATCH-6-44MM-jpg.webp", // Random image for Samsung Galaxy Watch
+			"https://fonexpress.net/wp-content/uploads/2023/09/WATCH-6-44MM-jpg.webp",
 		stores: ["amazon", "walmart"],
 		category: "smartwatches",
 	},
@@ -110,7 +110,7 @@ export const MOCK_PRODUCTS = [
 		price: 649.99,
 		tag: "Hot Sale",
 		tagColor: "bg-red-100 text-red-700",
-		image: "hhttps://m.media-amazon.com/images/I/71mTLn1iYML.jpg", // Random image for Camera
+		image: "hhttps://m.media-amazon.com/images/I/71mTLn1iYML.jpg",
 		stores: ["amazon", "ebay"],
 		category: "cameras",
 	},
@@ -122,7 +122,7 @@ export const MOCK_PRODUCTS = [
 		price: 69.99,
 		tag: "Top Pick",
 		tagColor: "bg-indigo-100 text-indigo-700",
-		image: "https://m.media-amazon.com/images/I/61IIJGmdmnL._SL1500_.jpg", // Random image for PS5 Controller
+		image: "https://m.media-amazon.com/images/I/61IIJGmdmnL._SL1500_.jpg",
 		stores: ["amazon", "walmart"],
 	},
 	{
@@ -132,7 +132,7 @@ export const MOCK_PRODUCTS = [
 		tag: "Limited Stock",
 		tagColor: "bg-orange-100 text-orange-700",
 		image:
-			"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQqpxDPUJAs9Czjr_cxhPgMBpyw0Hl7jErGGw&s", // Random image for Xbox Console
+			"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQqpxDPUJAs9Czjr_cxhPgMBpyw0Hl7jErGGw&s",
 		stores: ["ebay", "jumia"],
 	},
 
@@ -143,7 +143,7 @@ export const MOCK_PRODUCTS = [
 		price: 29.99,
 		tag: "Best Seller",
 		tagColor: "bg-green-100 text-green-700",
-		image: "https://m.media-amazon.com/images/I/615mdbIlDpL._AC_SL1500_.jpg", // Random image for Kettle
+		image: "https://m.media-amazon.com/images/I/615mdbIlDpL._AC_SL1500_.jpg",
 		stores: ["amazon", "jumia"],
 		category: "kitchen",
 	},
@@ -154,7 +154,7 @@ export const MOCK_PRODUCTS = [
 		tag: "Recommended",
 		tagColor: "bg-teal-100 text-teal-700",
 		image:
-			"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQC20U9snjdIZBjclaMdAzzL89nYgwdN1eRiQ&s", // Random image for Air Fryer
+			"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQC20U9snjdIZBjclaMdAzzL89nYgwdN1eRiQ&s",
 		stores: ["walmart", "amazon"],
 		category: "kitchen",
 	},
@@ -167,7 +167,7 @@ export const MOCK_PRODUCTS = [
 		tag: "Pro Choice",
 		tagColor: "bg-gray-100 text-gray-700",
 		image:
-			"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_me9JVf1duEXG6OCdsumbYf4ZvReMjFU2mw&s", // Random image for Computer Mouse
+			"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_me9JVf1duEXG6OCdsumbYf4ZvReMjFU2mw&s",
 		stores: ["amazon", "ebay"],
 		category: "computer",
 	},
@@ -191,7 +191,7 @@ export const MOCK_PRODUCTS = [
 		tag: "Hot Deal",
 		tagColor: "bg-orange-100 text-orange-700",
 		image:
-			"https://static.nike.com/a/images/t_web_pw_592_v2/f_auto/2e4a0c14-0f3a-42f8-8669-ac33ad9e21a8/NIKE+VOMERO+PLUS.png", // Random image for Running Shoes
+			"https://static.nike.com/a/images/t_web_pw_592_v2/f_auto/2e4a0c14-0f3a-42f8-8669-ac33ad9e21a8/NIKE+VOMERO+PLUS.png",
 		stores: ["amazon", "ebay"],
 		category: "fashion",
 	},
@@ -201,7 +201,7 @@ export const MOCK_PRODUCTS = [
 		price: 39.99,
 		tag: "Trending",
 		tagColor: "bg-pink-100 text-pink-700",
-		image: "https://picsum.photos/seed/womens-handbag/300/300", // Random image for Handbag
+		image: "https://m.media-amazon.com/images/I/61HT0mDzOWL.jpg",
 		stores: ["jumia", "walmart"],
 		category: "fashion",
 	},
@@ -214,7 +214,7 @@ export const MOCK_PRODUCTS = [
 		tag: "Cheapest",
 		tagColor: "bg-blue-100 text-blue-700",
 		image:
-			"https://cdn11.bigcommerce.com/s-3fd3md1ghs/images/stencil/1280x1280/products/36595/22467/100wcable__97235.1741863406.jpg?c=2", // Random image for Charging Cable
+			"https://cdn11.bigcommerce.com/s-3fd3md1ghs/images/stencil/1280x1280/products/36595/22467/100wcable__97235.1741863406.jpg?c=2",
 		stores: ["amazon", "ebay"],
 		category: "accessories",
 	},
@@ -225,7 +225,7 @@ export const MOCK_PRODUCTS = [
 		tag: "Top Rated",
 		tagColor: "bg-purple-100 text-purple-700",
 		image:
-			"https://www.sbsmobile.com/cdn/shop/files/TTBB20000PD45WK_PAN_1.jpg?v=1755058543&width=2048", // Random image for Power Bank
+			"https://www.sbsmobile.com/cdn/shop/files/TTBB20000PD45WK_PAN_1.jpg?v=1755058543&width=2048",
 		stores: ["amazon", "jumia"],
 		category: "accessories",
 	},

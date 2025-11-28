@@ -10,10 +10,10 @@ import {
 } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
 import { Throttle } from "@nestjs/throttler";
-import type { Request } from "express";
-import type { AuthDto } from "../users/dto/auth.dto";
-import type { LoginDto } from "../users/dto/login.dto";
-import type { UsersService } from "./users.service";
+import { Request } from "express";
+import { AuthDto } from "../users/dto/auth.dto";
+import { LoginDto } from "../users/dto/login.dto";
+import { UsersService } from "./users.service";
 
 interface UserRequest extends Request {
 	user: {

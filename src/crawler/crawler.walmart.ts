@@ -7,7 +7,7 @@ export class WalmartCrawler {
 	// You'll need to create a Walmart zone in Bright Data
 	// For now, using the Amazon zone (may or may not work)
 	private readonly SBR_WS_ENDPOINT =
-		"wss://brd-customer-hl_dee05534-zone-amazon_search_result:wvqepmkugk18@brd.superproxy.io:9222";
+		"wss://brd-customer-hl_a0e4cccb-zone-scraping_alibaba:eqa4zqx927r3@brd.superproxy.io:9222";
 
 	// Delay helper
 	private delay(ms: number): Promise<void> {

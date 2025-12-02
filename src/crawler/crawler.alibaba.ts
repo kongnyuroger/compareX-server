@@ -6,7 +6,7 @@ import { CrawledProduct } from "./types/crawler.types";
 export class AlibabaCrawler {
 	// Use the same endpoint as Amazon for now
 	private readonly SBR_WS_ENDPOINT =
-		"wss://brd-customer-hl_dee05534-zone-amazon_search_result:wvqepmkugk18@brd.superproxy.io:9222";
+		"wss://brd-customer-hl_a0e4cccb-zone-scraping_alibaba:eqa4zqx927r3@brd.superproxy.io:9222";
 
 	// Delay helper
 	private delay(ms: number): Promise<void> {

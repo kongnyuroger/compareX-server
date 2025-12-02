@@ -3,6 +3,7 @@
 import { Injectable } from "@nestjs/common";
 import { AlibabaCrawler } from "./crawler.alibaba";
 import { AmazonCrawler } from "./crawler.amazon";
+import { EbayCrawler } from "./crawler.ebay";
 import { WalmartCrawler } from "./crawler.walmart";
 import { CrawledProduct } from "./types/crawler.types";
 
@@ -11,18 +12,25 @@ export class CrawlerService {
 	private readonly alibaba = new AlibabaCrawler();
 	private readonly amazon = new AmazonCrawler();
 	private readonly walmart = new WalmartCrawler();
+	private readonly ebay = new EbayCrawler();
 
 	async searchAllSites(query: string): Promise<CrawledProduct[]> {
 		// Run searches in parallel for better performance
-		const [alibabaResults, amazonResults, walmartResults] = await Promise.all([
-			this.alibaba
-				.search(query, 2)
-				.catch(() => []), // Catch errors and return empty array
-			this.amazon.search(query, 2).catch(() => []),
-			this.walmart.search(query, 2).catch(() => []),
+		const [amazonResults, walmartResults, ebayResults] = await Promise.all([
+			//this.alibaba.search(query, 1).catch(() => []), // Catch errors and return empty array
+			this.amazon
+				.search(query, 1)
+				.catch(() => []),
+			this.walmart.search(query, 1).catch(() => []),
+			this.ebay.search(query, 1).catch(() => []),
 		]);
 
-		return [...alibabaResults, ...amazonResults, ...walmartResults];
+		return [
+			//...alibabaResults,
+			...amazonResults,
+			...walmartResults,
+			...ebayResults,
+		];
 	}
 
 	// Optional: Search individual sites
@@ -45,5 +53,12 @@ export class CrawlerService {
 		maxPages: number = 2,
 	): Promise<CrawledProduct[]> {
 		return this.walmart.search(query, maxPages);
+	}
+
+	async searchEbay(
+		query: string,
+		maxPages: number = 2,
+	): Promise<CrawledProduct[]> {
+		return this.ebay.search(query, maxPages);
 	}
 }

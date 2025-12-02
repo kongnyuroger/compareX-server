@@ -17,7 +17,7 @@ export class AiController {
 
 		//const terms =  await this.aiService.expandQuery(query);
 
-		const crawledResults = await this.crawlerService.searchAlibaba(query, 1);
+		const crawledResults = await this.crawlerService.searchAllSites(query);
 		//	return {
 		//  crawled: crawledResults,
 

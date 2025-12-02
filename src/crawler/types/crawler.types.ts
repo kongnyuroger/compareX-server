@@ -22,4 +22,11 @@ export interface CrawledProduct {
 	// Walmart-specific
 	hasFreeShipping?: boolean;
 	hasWalmartPlus?: boolean;
+
+	// eBay-specific
+	condition?: string; // New, Used, Refurbished, etc.
+	shipping?: string; // Shipping cost or "Free shipping"
+	seller?: string; // Seller name
+	watchCount?: string; // How many people are watching
+	isBuyItNow?: boolean; // Buy It Now vs Auction
 }

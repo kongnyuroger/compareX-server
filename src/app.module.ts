@@ -4,9 +4,9 @@ import { APP_GUARD } from "@nestjs/core";
 import { MongooseModule } from "@nestjs/mongoose";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AiModule } from "./ai/ai.module";
-import { AiService } from "./ai/ai.services";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
+import { CrawlerModule } from "./crawler/crawler.module";
 import { UsersModule } from "./users/users.module";
 
 @Module({
@@ -24,6 +24,7 @@ import { UsersModule } from "./users/users.module";
 			},
 		]),
 		AiModule,
+		CrawlerModule,
 	],
 	controllers: [AppController],
 	providers: [

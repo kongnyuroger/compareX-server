@@ -1,5 +1,3 @@
-// src/crawler/crawler.amazon.ts
-
 import puppeteer, { Browser, Page } from "puppeteer-core";
 import { CrawledProduct } from "./types/crawler.types";
 
@@ -7,7 +5,6 @@ export class AmazonCrawler {
 	private readonly SBR_WS_ENDPOINT =
 		"wss://brd-customer-hl_a0e4cccb-zone-scraping_alibaba:eqa4zqx927r3@brd.superproxy.io:9222";
 
-	// Delay helper
 	private delay(ms: number): Promise<void> {
 		return new Promise((resolve) => setTimeout(resolve, ms));
 	}

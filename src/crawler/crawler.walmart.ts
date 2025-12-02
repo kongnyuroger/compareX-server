@@ -1,10 +1,11 @@
-// src/crawler/crawler.alibaba.ts
+// src/crawler/crawler.walmart.ts
 
 import puppeteer, { Browser, Page } from "puppeteer-core";
 import { CrawledProduct } from "./types/crawler.types";
 
-export class AlibabaCrawler {
-	// Use the same endpoint as Amazon for now
+export class WalmartCrawler {
+	// You'll need to create a Walmart zone in Bright Data
+	// For now, using the Amazon zone (may or may not work)
 	private readonly SBR_WS_ENDPOINT =
 		"wss://brd-customer-hl_dee05534-zone-amazon_search_result:wvqepmkugk18@brd.superproxy.io:9222";
 
@@ -13,7 +14,7 @@ export class AlibabaCrawler {
 		return new Promise((resolve) => setTimeout(resolve, ms));
 	}
 
-	// Open a fresh browser for every page
+	// Open a fresh browser for every page — REQUIRED for Bright Data
 	private async openBrowser(): Promise<Browser> {
 		return puppeteer.connect({ browserWSEndpoint: this.SBR_WS_ENDPOINT });
 	}
@@ -24,7 +25,7 @@ export class AlibabaCrawler {
 		const page = await browser.newPage();
 
 		try {
-			// Set user agent
+			// Set realistic user agent
 			await page.setUserAgent(
 				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 			);
@@ -33,59 +34,55 @@ export class AlibabaCrawler {
 			await page.setViewport({ width: 1920, height: 1080 });
 
 			// Go directly to search results
-			const searchUrl = `https://www.alibaba.com/trade/search?SearchText=${encodeURIComponent(
+			const searchUrl = `https://www.walmart.com/search?q=${encodeURIComponent(
 				searchPhrase,
 			)}`;
 
-			console.log("Going directly to Alibaba search URL:", searchUrl);
+			console.log("Going directly to Walmart search URL:", searchUrl);
 			await page.goto(searchUrl, {
 				waitUntil: "domcontentloaded",
 				timeout: 60000,
 			});
 
-			// Wait for page to render
+			// Wait longer for React/JavaScript to render
 			await this.delay(5000);
 
-			// Take a screenshot
-			await page.screenshot({ path: "alibaba-loaded.png", fullPage: true });
+			// Take a screenshot to see what loaded
+			await page.screenshot({ path: "walmart-loaded.png", fullPage: true });
 
 			const pageContent = await page.content();
 			const pageTitle = await page.title();
 			console.log("Page title:", pageTitle);
 
-			// Get body text for debugging
+			// Check if we actually got content (not a block page)
 			const bodyText = await page.evaluate(() => document.body.innerText);
 			console.log("Body text length:", bodyText.length);
 			console.log("First 500 chars:", bodyText.substring(0, 500));
 
-			// Only block if we see actual CAPTCHA or verification text
-			// Don't block just because the word "verify" appears in the page
-			const hasCaptchaChallenge =
-				bodyText.includes("Please verify you are a human") ||
-				bodyText.includes("Press & Hold") ||
-				bodyText.includes("Slide to verify") ||
-				pageContent.includes('id="nc_1_wrapper"') || // Alibaba CAPTCHA element
-				pageTitle.toLowerCase().includes("robot check");
-
-			if (hasCaptchaChallenge) {
+			// More lenient blocking detection - only check for actual block messages
+			if (
+				bodyText.includes("Access Denied") ||
+				bodyText.includes("access denied") ||
+				bodyText.includes("Request blocked") ||
+				pageTitle.toLowerCase().includes("access denied") ||
+				pageContent.includes("cf-browser-verification") // Cloudflare
+			) {
 				throw new Error(
-					"Alibaba is showing CAPTCHA challenge - check alibaba-loaded.png",
+					"Walmart is blocking access - check walmart-loaded.png",
 				);
 			}
 
-			// Check if we got products - Alibaba shows "Showing X products"
-			if (bodyText.includes("products from") || bodyText.includes("Showing")) {
-				console.log("✓ Products page detected!");
-			}
-
-			// Try multiple selectors based on the screenshot
+			// Try multiple possible selectors for Walmart product cards
 			const possibleSelectors = [
-				'div[class*="organic-list"]', // Main container
-				'div[data-content="shop_search_result"]',
-				".organic-list-offer",
-				".search-card-e-slider", // Image container
-				'a[href*="/product-detail/"]', // Product links
-				"div.organic-gallery-offer-outter",
+				"[data-item-id]",
+				'[data-testid="list-view"]',
+				'div[data-testid="list-view"] > div > div', // More specific
+				'[data-automation-id="product-title"]',
+				".search-result-gridview-item",
+				".search-result-product-title",
+				'[class*="SearchGridItem"]',
+				'[data-testid="item-stack"]',
+				'div[data-testid="item-stack"] > div',
 			];
 
 			let selectorFound = false;
@@ -100,6 +97,7 @@ export class AlibabaCrawler {
 					console.log(`Trying selector "${selector}": ${count} elements found`);
 
 					if (count > 0) {
+						await page.waitForSelector(selector, { timeout: 3000 });
 						console.log(`✓ Found selector: ${selector}`);
 						foundSelector = selector;
 						selectorFound = true;
@@ -111,31 +109,52 @@ export class AlibabaCrawler {
 			}
 
 			if (!selectorFound) {
-				// Debug: show what classes are actually on the page
+				// Log what we actually got
 				console.log("\n=== DEBUGGING INFO ===");
-				const classInfo = await page.evaluate(() => {
-					const elements = document.querySelectorAll(
-						'[class*="organic"], [class*="search"], [class*="product"]',
-					);
-					return Array.from(elements)
-						.slice(0, 10)
-						.map((el) => ({
-							tag: el.tagName,
-							class: el.className,
-							hasImage: !!el.querySelector("img"),
-							hasLink: !!el.querySelector("a"),
-						}));
+				console.log("Available elements on page:");
+
+				const elementInfo = await page.evaluate(() => {
+					const allElements = document.querySelectorAll("*");
+					const dataElements: any[] = [];
+
+					allElements.forEach((el) => {
+						// Look for elements with data attributes
+						if (el.hasAttributes()) {
+							const attrs = Array.from(el.attributes);
+							const dataAttrs = attrs.filter(
+								(attr) =>
+									attr.name.startsWith("data-") || attr.name === "class",
+							);
+
+							if (
+								dataAttrs.length > 0 &&
+								el.textContent &&
+								el.textContent.trim().length > 0
+							) {
+								dataElements.push({
+									tag: el.tagName,
+									attrs: dataAttrs
+										.map((a) => `${a.name}="${a.value}"`)
+										.join(" "),
+									textPreview: el.textContent.trim().substring(0, 50),
+								});
+							}
+						}
+					});
+
+					return dataElements.slice(0, 20); // First 20 elements
 				});
-				console.log("Elements found:", JSON.stringify(classInfo, null, 2));
+
+				console.log(JSON.stringify(elementInfo, null, 2));
 				console.log("======================\n");
 
-				// Save HTML for inspection
+				// Save HTML for manual inspection
 				const fs = require("fs");
-				fs.writeFileSync("alibaba-page.html", pageContent);
-				console.log("Page HTML saved to alibaba-page.html");
+				fs.writeFileSync("walmart-page.html", pageContent);
+				console.log("Page HTML saved to walmart-page.html");
 
 				throw new Error(
-					"Could not find product cards - check alibaba-loaded.png and alibaba-page.html",
+					"Could not find product cards - check walmart-loaded.png, walmart-page.html and console output",
 				);
 			}
 
@@ -145,21 +164,22 @@ export class AlibabaCrawler {
 		} catch (error) {
 			console.error("Error in getSearchResultsUrl:", (error as Error).message);
 			await page.screenshot({
-				path: "alibaba-error-screenshot.png",
+				path: "walmart-error-screenshot.png",
 				fullPage: true,
 			});
 
+			// Log page HTML to file for debugging
 			const content = await page.content();
 			const fs = require("fs");
-			fs.writeFileSync("alibaba-page.html", content);
-			console.log("Page HTML saved to alibaba-page.html");
+			fs.writeFileSync("walmart-page.html", content);
+			console.log("Page HTML saved to walmart-page.html");
 
 			await browser.close();
 			throw error;
 		}
 	}
 
-	// Scrape a single Alibaba result page
+	// Scrape a single Walmart result page
 	private async scrapePage(
 		url: string,
 	): Promise<{ data: any[]; nextPageUrl: string | null }> {
@@ -172,20 +192,23 @@ export class AlibabaCrawler {
 				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 			);
 
+			// Set viewport
 			await page.setViewport({ width: 1920, height: 1080 });
 
-			console.log("Navigating to Alibaba:", url);
+			console.log("Navigating to Walmart:", url);
 			await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
 
 			// Wait for page to stabilize
 			await this.delay(5000);
 
-			// Based on the screenshot, products are in divs with organic classes
+			// Try to find product cards with more selectors
 			const possibleSelectors = [
-				'div[class*="organic-list"]',
-				"div.organic-list-offer",
-				'div[data-content="shop_search_result"] > div',
-				".organic-gallery-offer-outter",
+				"[data-item-id]",
+				'div[data-testid="list-view"] > div > div',
+				'[data-testid="item-stack"] > div',
+				".search-result-gridview-item",
+				'[class*="SearchGridItem"]',
+				'div[data-automation-id*="product"]',
 			];
 
 			let workingSelector = "";
@@ -195,6 +218,7 @@ export class AlibabaCrawler {
 				}, selector);
 
 				if (count > 3) {
+					// Need at least 3 products
 					console.log(`Found ${count} products with selector: ${selector}`);
 					workingSelector = selector;
 					break;
@@ -211,27 +235,45 @@ export class AlibabaCrawler {
 				return cards
 					.map((card) => {
 						try {
-							// Title - look for links with product titles
+							// Title - try multiple approaches
 							let title = "";
-							const titleElement =
-								card.querySelector("a[title]") ||
-								card.querySelector("h2 a") ||
-								card.querySelector('[class*="title"]');
 
-							if (titleElement) {
-								title =
-									titleElement.getAttribute("title") ||
-									(titleElement as HTMLElement).innerText?.trim() ||
-									(titleElement as HTMLElement).textContent?.trim() ||
-									"";
+							// Try data-automation-id first
+							const titleByAutomation = card.querySelector(
+								'[data-automation-id="product-title"]',
+							) as HTMLElement;
+							if (titleByAutomation) {
+								title = titleByAutomation.innerText?.trim() || "";
 							}
 
-							if (!title || title.length < 5) return null;
+							// Try span with product title
+							if (!title) {
+								const titleBySpan = card.querySelector(
+									'span[data-automation-id="product-title"]',
+								) as HTMLElement;
+								if (titleBySpan) {
+									title = titleBySpan.innerText?.trim() || "";
+								}
+							}
+
+							// Try any link with text
+							if (!title) {
+								const links = card.querySelectorAll("a");
+								for (const link of links) {
+									const text = (link as HTMLElement).innerText?.trim();
+									if (text && text.length > 10) {
+										title = text;
+										break;
+									}
+								}
+							}
+
+							if (!title) return null;
 
 							// Product URL
 							const linkElement =
-								card.querySelector('a[href*="/product-detail/"]') ||
-								card.querySelector('a[href*=".html"]') ||
+								card.querySelector('a[href*="/ip/"]') ||
+								card.querySelector("a[link-identifier]") ||
 								card.querySelector("a[href]");
 							const detailLink = linkElement?.getAttribute("href") || "N/A";
 
@@ -242,68 +284,65 @@ export class AlibabaCrawler {
 							const imageLink =
 								imageElement?.src ||
 								imageElement?.getAttribute("data-src") ||
-								imageElement?.getAttribute("data-image") ||
 								imageElement?.getAttribute("srcset")?.split(" ")[0] ||
 								"N/A";
 
-							// Price - very flexible
+							// Price - be very flexible
 							let price = "N/A";
 							const priceElements = card.querySelectorAll(
-								'[class*="price"], [class*="Price"]',
+								'[class*="price"], [data-automation-id*="price"]',
 							);
 							for (const el of priceElements) {
 								const text = (el as HTMLElement).innerText?.trim();
-								if (
-									text &&
-									(text.includes("$") || text.includes("US") || /\d/.test(text))
-								) {
+								if (text && text.includes("$")) {
 									price = text;
 									break;
 								}
 							}
 
-							// MOQ (Minimum Order Quantity)
-							let moq = "N/A";
-							const moqElements = card.querySelectorAll(
-								'[class*="moq"], [class*="min-order"]',
-							);
-							for (const el of moqElements) {
-								const text = (el as HTMLElement).innerText?.trim();
-								if (text && text.toLowerCase().includes("piece")) {
-									moq = text;
-									break;
-								}
+							// Rating
+							let rating = "N/A";
+							const ratingElement =
+								card.querySelector('[aria-label*="star"]') ||
+								card.querySelector('[class*="rating"]');
+							if (ratingElement) {
+								rating =
+									ratingElement.getAttribute("aria-label") ||
+									(ratingElement as HTMLElement).innerText?.trim() ||
+									"N/A";
 							}
 
-							// Supplier
-							let supplier = "N/A";
-							const supplierElements = card.querySelectorAll(
-								'[class*="company"], [class*="supplier"]',
-							);
-							for (const el of supplierElements) {
-								const text = (el as HTMLElement).innerText?.trim();
-								if (text && text.length > 3 && text.length < 100) {
-									supplier = text;
-									break;
-								}
+							// Review count
+							let reviewCount = "N/A";
+							const reviewElement = card.querySelector('[class*="review"]');
+							if (reviewElement) {
+								reviewCount =
+									(reviewElement as HTMLElement).innerText?.trim() || "N/A";
 							}
 
-							// Trade Assurance
-							const hasTradeAssurance = card.textContent?.includes(
-								"Trade Assurance",
-							)
-								? "yes"
-								: "no";
+							// Badges
+							const isSponsored =
+								card.textContent?.includes("Sponsored") ||
+								card.textContent?.includes("Ad")
+									? "yes"
+									: "no";
+
+							const hasFreeShipping =
+								card.textContent?.toLowerCase().includes("free shipping") ||
+								card.textContent?.toLowerCase().includes("free delivery")
+									? "yes"
+									: "no";
 
 							return {
 								title,
 								detailPageUrl: detailLink,
 								imageUrl: imageLink,
 								price,
-								moq,
-								supplier,
-								rating: "N/A",
-								hasTradeAssurance,
+								rating,
+								reviewCount,
+								isSponsored,
+								hasFreeShipping,
+								hasWalmartPlus: "no", // Hard to detect
 							};
 						} catch (error) {
 							console.error("Error parsing product card:", error);
@@ -318,11 +357,10 @@ export class AlibabaCrawler {
 			// Get next page URL
 			const nextPageUrl = await page.evaluate(() => {
 				const nextSelectors = [
-					".next",
-					"a.page-next",
-					'[aria-label="Next"]',
-					".seb-pagination__pages a:last-child",
-					'button[class*="next"]',
+					'a[aria-label="Next page"]',
+					'button[aria-label="Next page"]',
+					".paginator-btn-next",
+					'[class*="next"]',
 				];
 
 				for (const sel of nextSelectors) {
@@ -330,9 +368,10 @@ export class AlibabaCrawler {
 					if (
 						nextBtn &&
 						!nextBtn.classList.contains("disabled") &&
-						!nextBtn.hasAttribute("disabled")
+						!nextBtn.hasAttribute("disabled") &&
+						!nextBtn.getAttribute("aria-disabled")
 					) {
-						return nextBtn.getAttribute("href");
+						return nextBtn.getAttribute("href") || null;
 					}
 				}
 				return null;
@@ -343,7 +382,7 @@ export class AlibabaCrawler {
 		} catch (error) {
 			console.error("Error in scrapePage:", (error as Error).message);
 			await page.screenshot({
-				path: `alibaba-error-page-${Date.now()}.png`,
+				path: `walmart-error-page-${Date.now()}.png`,
 				fullPage: true,
 			});
 			await browser.close();
@@ -351,19 +390,21 @@ export class AlibabaCrawler {
 		}
 	}
 
-	// Main search method
+	// Main search method - public interface
 	async search(query: string, maxPages: number = 2): Promise<CrawledProduct[]> {
 		try {
-			console.log("Alibaba Search:", query);
+			console.log("Walmart Search:", query);
 			console.log("Max pages:", maxPages);
 			console.log("------------------------------------");
 
+			// Get search results URL
 			let currentUrl = await this.getSearchResultsUrl(query);
 
 			const allData: any[] = [];
 
+			// Loop through pages
 			for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
-				console.log(`\nScraping Alibaba Page ${pageNum}...`);
+				console.log(`\nScraping Walmart Page ${pageNum}...`);
 
 				const { data, nextPageUrl } = await this.scrapePage(currentUrl);
 
@@ -374,46 +415,51 @@ export class AlibabaCrawler {
 					break;
 				}
 
+				// Handle relative URLs
 				currentUrl = nextPageUrl.startsWith("http")
 					? nextPageUrl
-					: `https://www.alibaba.com${nextPageUrl}`;
+					: `https://www.walmart.com${nextPageUrl}`;
 
 				await this.delay(2000);
 			}
 
 			console.log(
-				`\nAlibaba scraping finished. Found ${allData.length} products.\n`,
+				`\nWalmart scraping finished. Found ${allData.length} products.\n`,
 			);
 
+			// Transform to CrawledProduct format
 			return this.transformResults(allData);
 		} catch (error) {
-			console.error("Error in Alibaba search:", error);
+			console.error("Error in Walmart search:", error);
 			return [];
 		}
 	}
 
-	// Transform results
+	// Transform Walmart results to match CrawledProduct interface
 	private transformResults(rawData: any[]): CrawledProduct[] {
 		return rawData.map((item) => ({
 			title: item.title,
 			price: this.parsePrice(item.price),
-			currency: this.parseCurrency(item.price),
+			currency: "USD",
 			imageUrl:
 				item.imageUrl !== "N/A" ? this.fixImageUrl(item.imageUrl) : undefined,
 			productUrl:
 				item.detailPageUrl !== "N/A"
 					? this.fixProductUrl(item.detailPageUrl)
 					: undefined,
-			source: "Alibaba",
-			supplier: item.supplier !== "N/A" ? item.supplier : undefined,
-			moq: item.moq !== "N/A" ? item.moq : undefined,
+			source: "Walmart",
 			rating: this.parseRating(item.rating),
-			hasTradeAssurance: item.hasTradeAssurance === "yes",
+			reviewCount: this.parseReviewCount(item.reviewCount),
+			isSponsored: item.isSponsored === "yes",
+			hasFreeShipping: item.hasFreeShipping === "yes",
+			hasWalmartPlus: item.hasWalmartPlus === "yes",
 		}));
 	}
 
+	// Helper to parse price strings
 	private parsePrice(priceString: string): number | undefined {
 		if (!priceString || priceString === "N/A") return undefined;
+
 		const match = priceString.match(/[\d,]+\.?\d*/);
 		if (match) {
 			return parseFloat(match[0].replace(/,/g, ""));
@@ -421,17 +467,10 @@ export class AlibabaCrawler {
 		return undefined;
 	}
 
-	private parseCurrency(priceString: string): string {
-		if (!priceString || priceString === "N/A") return "USD";
-		if (priceString.includes("$") || priceString.includes("US")) return "USD";
-		if (priceString.includes("€") || priceString.includes("EUR")) return "EUR";
-		if (priceString.includes("£") || priceString.includes("GBP")) return "GBP";
-		if (priceString.includes("¥") || priceString.includes("CNY")) return "CNY";
-		return "USD";
-	}
-
+	// Helper to parse rating strings
 	private parseRating(ratingString: string): number | undefined {
 		if (!ratingString || ratingString === "N/A") return undefined;
+
 		const match = ratingString.match(/(\d+\.?\d*)/);
 		if (match) {
 			return parseFloat(match[1]);
@@ -439,22 +478,35 @@ export class AlibabaCrawler {
 		return undefined;
 	}
 
+	// Helper to parse review count
+	private parseReviewCount(countString: string): number | undefined {
+		if (!countString || countString === "N/A") return undefined;
+
+		const match = countString.match(/[\d,]+/);
+		if (match) {
+			return parseInt(match[0].replace(/,/g, ""), 10);
+		}
+		return undefined;
+	}
+
+	// Fix image URLs
 	private fixImageUrl(url: string): string {
 		if (url.startsWith("//")) {
 			return `https:${url}`;
 		}
 		if (!url.startsWith("http")) {
-			return `https://www.alibaba.com${url}`;
+			return `https://www.walmart.com${url}`;
 		}
 		return url;
 	}
 
+	// Fix product URLs
 	private fixProductUrl(url: string): string {
 		if (url.startsWith("//")) {
 			return `https:${url}`;
 		}
 		if (!url.startsWith("http")) {
-			return `https://www.alibaba.com${url}`;
+			return `https://www.walmart.com${url}`;
 		}
 		return url;
 	}

@@ -3,6 +3,14 @@ import { CrawledProduct } from "./types/crawler.types";
 
 export class AmazonCrawler {
 	private readonly SBR_WS_ENDPOINT = process.env.SBR_WS_ENDPOINT;
+
+	constructor() {
+		if (!this.SBR_WS_ENDPOINT) {
+			throw new Error(
+				"SBR_WS_ENDPOINT environment variable is required for AmazonCrawler",
+			);
+		}
+	}
 	private delay(ms: number): Promise<void> {
 		return new Promise((resolve) => setTimeout(resolve, ms));
 	}

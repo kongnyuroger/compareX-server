@@ -1,13 +1,16 @@
-// src/crawler/crawler.amazon.ts
-
-import puppeteer, { Browser, Page } from "puppeteer-core";
+import puppeteer, { Browser } from "puppeteer-core";
 import { CrawledProduct } from "./types/crawler.types";
 
 export class AmazonCrawler {
-	private readonly SBR_WS_ENDPOINT =
-		"wss://brd-customer-hl_dee05534-zone-amazon_search_result:wvqepmkugk18@brd.superproxy.io:9222";
+	private readonly SBR_WS_ENDPOINT = process.env.SBR_WS_ENDPOINT;
 
-	// Delay helper
+	constructor() {
+		if (!this.SBR_WS_ENDPOINT) {
+			throw new Error(
+				"SBR_WS_ENDPOINT environment variable is required for AmazonCrawler",
+			);
+		}
+	}
 	private delay(ms: number): Promise<void> {
 		return new Promise((resolve) => setTimeout(resolve, ms));
 	}

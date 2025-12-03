@@ -1,31 +1,48 @@
 // src/crawler/crawler.service.ts
 
 import { Injectable } from "@nestjs/common";
-import { AlibabaCrawler } from "./crawler.alibaba";
 import { AmazonCrawler } from "./crawler.amazon";
+import { EbayCrawler } from "./crawler.ebay";
 import { WalmartCrawler } from "./crawler.walmart";
 import { CrawledProduct } from "./types/crawler.types";
 
 @Injectable()
 export class CrawlerService {
-	private readonly alibaba = new AlibabaCrawler();
 	private readonly amazon = new AmazonCrawler();
 	private readonly walmart = new WalmartCrawler();
+	private readonly ebay = new EbayCrawler();
 
 	async searchAllSites(query: string): Promise<CrawledProduct[]> {
-		// Run searches in parallel for better performance
-		const [alibabaResults, amazonResults, walmartResults] = await Promise.all([
-			this.alibaba
-				.search(query, 2)
-				.catch(() => []), // Catch errors and return empty array
-			this.amazon.search(query, 2).catch(() => []),
-			this.walmart.search(query, 2).catch(() => []),
+		console.log(`\n🔍 Starting parallel search for: "${query}"\n`);
+
+		// Run searches in parallel with proper error handling
+		const results = await Promise.allSettled([
+			this.amazon.search(query, 1),
+			this.walmart.search(query, 1),
+			this.ebay.search(query, 1),
+			// this.alibaba.search(query, 1), // Uncomment when Alibaba zone is ready
 		]);
 
-		return [...alibabaResults, ...amazonResults, ...walmartResults];
+		// Collect successful results
+		const allProducts: CrawledProduct[] = [];
+
+		results.forEach((result, index) => {
+			const siteName = ["Amazon", "Walmart", "eBay"][index];
+
+			if (result.status === "fulfilled") {
+				console.log(`✅${siteName}: Found ${result.value.length} products`);
+				allProducts.push(...result.value);
+			} else {
+				console.log(` ${siteName}: Failed - ${result.reason.message}`);
+			}
+		});
+
+		console.log(`\n🎉 Total products found: ${allProducts.length}\n`);
+
+		return allProducts;
 	}
 
-	// Optional: Search individual sites
+	// Search individual sites
 	async searchAmazon(
 		query: string,
 		maxPages: number = 2,
@@ -33,17 +50,17 @@ export class CrawlerService {
 		return this.amazon.search(query, maxPages);
 	}
 
-	async searchAlibaba(
-		query: string,
-		maxPages: number = 2,
-	): Promise<CrawledProduct[]> {
-		return this.alibaba.search(query, maxPages);
-	}
-
 	async searchWalmart(
 		query: string,
 		maxPages: number = 2,
 	): Promise<CrawledProduct[]> {
 		return this.walmart.search(query, maxPages);
+	}
+
+	async searchEbay(
+		query: string,
+		maxPages: number = 2,
+	): Promise<CrawledProduct[]> {
+		return this.ebay.search(query, maxPages);
 	}
 }

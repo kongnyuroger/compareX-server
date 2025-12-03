@@ -1,13 +1,12 @@
 // src/crawler/crawler.walmart.ts
 
-import puppeteer, { Browser, Page } from "puppeteer-core";
+import puppeteer, { Browser } from "puppeteer-core";
 import { CrawledProduct } from "./types/crawler.types";
 
 export class WalmartCrawler {
 	// You'll need to create a Walmart zone in Bright Data
 	// For now, using the Amazon zone (may or may not work)
-	private readonly SBR_WS_ENDPOINT =
-		"wss://brd-customer-hl_a0e4cccb-zone-scraping_alibaba:eqa4zqx927r3@brd.superproxy.io:9222";
+	private readonly SBR_WS_ENDPOINT = process.env.SBR_WS_ENDPOINT;
 
 	// Delay helper
 	private delay(ms: number): Promise<void> {
@@ -148,9 +147,6 @@ export class WalmartCrawler {
 				console.log(JSON.stringify(elementInfo, null, 2));
 				console.log("======================\n");
 
-				// Save HTML for manual inspection
-				const fs = require("fs");
-				fs.writeFileSync("walmart-page.html", pageContent);
 				console.log("Page HTML saved to walmart-page.html");
 
 				throw new Error(
@@ -170,8 +166,7 @@ export class WalmartCrawler {
 
 			// Log page HTML to file for debugging
 			const content = await page.content();
-			const fs = require("fs");
-			fs.writeFileSync("walmart-page.html", content);
+
 			console.log("Page HTML saved to walmart-page.html");
 
 			await browser.close();
@@ -345,8 +340,7 @@ export class WalmartCrawler {
 								hasWalmartPlus: "no", // Hard to detect
 							};
 						} catch (error) {
-							console.error("Error parsing product card:", error);
-							return null;
+							return { error: true, message: String(error) };
 						}
 					})
 					.filter(Boolean);

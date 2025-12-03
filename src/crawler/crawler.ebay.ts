@@ -1,11 +1,10 @@
 // src/crawler/crawler.ebay.ts
 
-import puppeteer, { Browser, Page } from "puppeteer-core";
+import puppeteer, { Browser } from "puppeteer-core";
 import { CrawledProduct } from "./types/crawler.types";
 
 export class EbayCrawler {
-	private readonly SBR_WS_ENDPOINT =
-		"wss://brd-customer-hl_a0e4cccb-zone-scraping_alibaba:eqa4zqx927r3@brd.superproxy.io:9222";
+	private readonly SBR_WS_ENDPOINT = process.env.SBR_WS_ENDPOINT;
 
 	private delay(ms: number): Promise<void> {
 		return new Promise((resolve) => setTimeout(resolve, ms));
@@ -37,13 +36,35 @@ export class EbayCrawler {
 			await this.delay(5000);
 
 			const url = page.url();
-			await browser.close();
 			return url;
 		} catch (error) {
 			console.error("Error in getSearchResultsUrl:", (error as Error).message);
-			await page.screenshot({ path: "ebay-error-screenshot.png" });
-			await browser.close();
+			// Try to take a screenshot, but don't let that throw and mask the original error
+			try {
+				await page.screenshot({ path: "ebay-error-screenshot.png" });
+			} catch (screenshotErr) {
+				console.error(
+					"Screenshot failed in getSearchResultsUrl:",
+					screenshotErr,
+				);
+			}
 			throw error;
+		} finally {
+			if (browser) {
+				try {
+					// Close only if connected to avoid errors
+					if (
+						(browser as any).isConnected ? (browser as any).isConnected() : true
+					) {
+						await browser.close();
+					}
+				} catch (closeErr) {
+					console.error(
+						"Error closing browser in getSearchResultsUrl:",
+						closeErr,
+					);
+				}
+			}
 		}
 	}
 
@@ -160,13 +181,28 @@ export class EbayCrawler {
 					: null;
 			});
 
-			await browser.close();
 			return { data, nextPageUrl };
 		} catch (error) {
 			console.error("Error in scrapePage:", (error as Error).message);
-			await page.screenshot({ path: `ebay-error-page-${Date.now()}.png` });
-			await browser.close();
+			// Attempt screenshot but don't let it block error handling
+			try {
+				await page.screenshot({ path: `ebay-error-page-${Date.now()}.png` });
+			} catch (screenshotErr) {
+				console.error("Screenshot failed in scrapePage:", screenshotErr);
+			}
 			throw error;
+		} finally {
+			if (browser) {
+				try {
+					if (
+						(browser as any).isConnected ? (browser as any).isConnected() : true
+					) {
+						await browser.close();
+					}
+				} catch (closeErr) {
+					console.error("Error closing browser in scrapePage:", closeErr);
+				}
+			}
 		}
 	}
 
@@ -219,7 +255,7 @@ export class EbayCrawler {
 		return rawData.map((item) => ({
 			title: item.title,
 			price: this.parsePrice(item.price),
-			currency: "USD",
+			currency: this.parseCurrency(item.price), // { changed code }
 			imageUrl: item.imageUrl !== "N/A" ? item.imageUrl : undefined,
 			productUrl:
 				item.detailPageUrl !== "N/A"
@@ -244,5 +280,37 @@ export class EbayCrawler {
 			return parseFloat(match[0].replace(/,/g, ""));
 		}
 		return undefined;
+	}
+
+	// Helper to extract currency code from price string, fallback to 'USD'
+	private parseCurrency(priceString?: string): string {
+		if (!priceString) return "USD";
+
+		// Check for explicit currency codes
+		const codeMatch = priceString.match(
+			/\b(USD|EUR|GBP|JPY|AUD|CAD|CNY|INR|CHF|KRW|RUB)\b/i,
+		);
+		if (codeMatch) return codeMatch[1].toUpperCase();
+
+		// Symbols and common patterns
+		if (priceString.includes("€")) return "EUR";
+		if (priceString.includes("£")) return "GBP";
+		// Handle Yen vs Yuan: prioritize CNY if indicated, otherwise JPY
+		if (/[¥￥]/.test(priceString)) {
+			if (/C\s*¥|CNY|CN¥/i.test(priceString)) return "CNY";
+			return "JPY";
+		}
+		if (priceString.includes("₹")) return "INR";
+		if (/A\s*\$|^A\$|AUD/i.test(priceString)) return "AUD";
+		if (/C\s*\$|^C\$|CAD/i.test(priceString)) return "CAD";
+		if (priceString.includes("CHF")) return "CHF";
+		if (priceString.includes("₩")) return "KRW";
+		if (priceString.includes("₽")) return "RUB";
+
+		// Dollar sign fallback -> USD
+		if (priceString.includes("$")) return "USD";
+
+		// Default fallback
+		return "USD";
 	}
 }

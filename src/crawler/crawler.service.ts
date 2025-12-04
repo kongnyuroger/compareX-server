@@ -17,8 +17,8 @@ export class CrawlerService {
 
 		// Run searches in parallel with proper error handling
 		const results = await Promise.allSettled([
-			this.amazon.search(query, 1),
 			this.walmart.search(query, 1),
+			this.amazon.search(query, 1),
 			this.ebay.search(query, 1),
 			// this.alibaba.search(query, 1), // Uncomment when Alibaba zone is ready
 		]);

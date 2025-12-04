@@ -1,5 +1,3 @@
-// src/crawler/crawler.service.ts
-
 import { Injectable } from "@nestjs/common";
 import { AmazonCrawler } from "./crawler.amazon";
 import { EbayCrawler } from "./crawler.ebay";

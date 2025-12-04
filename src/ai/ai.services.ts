@@ -186,7 +186,12 @@ export class AiService {
 				],
 			});
 
-			let content = response.choices[0].message.content || "{}";
+			const choice = response.choices[0];
+			if (!choice?.message?.content) {
+				console.warn("Empty AI response, falling back to local ranking");
+				return { ranked: productsToRank };
+			}
+			let content = choice.message.content;
 			content = content
 				.replace(/```json/gi, "")
 				.replace(/```/g, "")

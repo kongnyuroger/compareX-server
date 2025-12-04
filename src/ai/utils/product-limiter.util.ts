@@ -161,6 +161,9 @@ export class ProductLimiter {
 		stats: any[],
 	): LimitedResults {
 		const platformCount = platformResults.size;
+		if (platformCount === 0) {
+			return { highRelevance: [], otherResults: [], stats };
+		}
 		const perPlatformLimit = Math.floor(globalLimit / platformCount);
 		const remainder = globalLimit % platformCount;
 
@@ -223,7 +226,7 @@ export class ProductLimiter {
 	): LimitedResults {
 		console.log("Score-based distribution (may favor certain platforms)");
 
-		const globalSorted = allSelected.sort(
+		const globalSorted = [...allSelected].sort(
 			(a, b) => (b as any).relevanceScore - (a as any).relevanceScore,
 		);
 

@@ -90,10 +90,13 @@ export class SearchHistoryController {
 	) {
 		const userId = req.user!.userId;
 
+		const validLimit = Math.min(Math.max(limit ? +limit : 50, 1), 100);
+		const validSkip = Math.max(skip ? +skip : 0, 0);
+
 		return this.searchHistoryService.getUserHistory(
 			userId,
-			limit ? +limit : 50,
-			skip ? +skip : 0,
+			validLimit,
+			validSkip,
 		);
 	}
 

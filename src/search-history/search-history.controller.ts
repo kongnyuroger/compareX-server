@@ -4,7 +4,6 @@ import {
 	Get,
 	NotFoundException,
 	Param,
-	Post,
 	Query,
 	Req,
 	UseGuards,
@@ -100,9 +99,10 @@ export class SearchHistoryController {
 		);
 	}
 
-	@Post("history/:id")
-	async rerunSearch(@Param("id") searchId: string, @Req() req: UserRequest) {
-		const userId = req.user?.userId || null;
+	@UseGuards(AuthGuard("jwt"))
+	@Get("history/:id")
+	async getSearchById(@Param("id") searchId: string, @Req() req: UserRequest) {
+		const userId = req.user!.userId;
 
 		const originalSearch = await this.searchHistoryService.getSearchById(
 			searchId,

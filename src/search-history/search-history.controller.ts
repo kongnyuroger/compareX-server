@@ -50,10 +50,10 @@ export class SearchHistoryController {
 			query,
 			crawledProducts,
 			{
-				resultsPerPlatform: searchParams.resultsPerPlatform || 30,
-				globalLimit: searchParams.globalLimit || 90,
-				minRelevanceScore: searchParams.minScore || 0.5,
-				sortBy: searchParams.sortBy || "relevance",
+				resultsPerPlatform: searchParams.resultsPerPlatform ?? 30,
+				globalLimit: searchParams.globalLimit ?? 90,
+				minRelevanceScore: searchParams.minScore ?? 0.5,
+				sortBy: searchParams.sortBy ?? "relevance",
 			},
 		);
 
@@ -61,11 +61,11 @@ export class SearchHistoryController {
 			query,
 			userId,
 			{
-				resultsPerPlatform: searchParams.resultsPerPlatform || 30,
-				globalLimit: searchParams.globalLimit || 90,
-				minScore: searchParams.minScore || 0.5,
-				sortBy: searchParams.sortBy || "relevance",
-				balance: searchParams.balance || false,
+				resultsPerPlatform: searchParams.resultsPerPlatform ?? 30,
+				globalLimit: searchParams.globalLimit ?? 90,
+				minScore: searchParams.minScore ?? 0.5,
+				sortBy: searchParams.sortBy ?? "relevance",
+				balance: searchParams.balance ?? false,
 			},
 			{
 				totalFound: rankedResults.totalFound,
@@ -81,7 +81,6 @@ export class SearchHistoryController {
 			...rankedResults,
 		};
 	}
-
 	@UseGuards(AuthGuard("jwt"))
 	@Get("history")
 	async getHistory(

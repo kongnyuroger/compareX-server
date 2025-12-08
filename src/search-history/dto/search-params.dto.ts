@@ -1,6 +1,7 @@
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import {
 	IsBoolean,
+	IsIn,
 	IsNumber,
 	IsOptional,
 	IsString,
@@ -32,10 +33,15 @@ export class SearchParamsDto {
 
 	@IsOptional()
 	@IsString()
+	@IsIn(["relevance", "price_low", "price_high", "rating"])
 	sortBy?: "relevance" | "price_low" | "price_high" | "rating";
 
 	@IsOptional()
-	@Type(() => Boolean)
 	@IsBoolean()
+	@Transform(({ value }) => {
+		if (value === "true" || value === true) return true;
+		if (value === "false" || value === false) return false;
+		return undefined; // preserves Optional behavior
+	})
 	balance?: boolean;
 }

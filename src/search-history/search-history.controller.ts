@@ -11,6 +11,7 @@ import {
 import { AuthGuard } from "@nestjs/passport";
 import { Request } from "express";
 import { AiService } from "src/ai/ai.services";
+import { MOCK_PRODUCTS } from "src/ai/constants/mock-products";
 import { CrawlerService } from "src/crawler/crawler.service";
 import { SearchParamsDto } from "./dto/search-params.dto";
 import { SearchHistoryService } from "./search-history.service";
@@ -125,6 +126,11 @@ export class SearchHistoryController {
 			otherProducts: originalSearch.otherProducts || [],
 			filters: originalSearch.searchParams || {},
 		};
+	}
+
+	@Get("trending")
+	async getTrending() {
+		return MOCK_PRODUCTS;
 	}
 
 	@Get("stats")

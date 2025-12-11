@@ -151,6 +151,7 @@ export class SearchHistoryController {
 	 * REPLAY SEARCH
 	 * Returns 100% raw saved data, identical to original search()
 	 */
+	@UseGuards(AuthGuard("jwt"))
 	@Post("history/:id/replay")
 	async replaySearch(@Param("id") searchId: string, @Req() req: UserRequest) {
 		const userId = req.user?.userId || null;
@@ -193,7 +194,9 @@ export class SearchHistoryController {
 
 		return Array.from(platforms.entries()).map(([platform, count]) => ({
 			platform,
-			count,
+			total: count,
+			kept: count,
+			discarded: 0,
 		}));
 	}
 }

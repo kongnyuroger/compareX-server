@@ -185,6 +185,11 @@ export class SearchHistoryController {
 		};
 	}
 
+	@Get("trending")
+	async getTrending() {
+		return MOCK_PRODUCTS;
+	}
+
 	private buildPlatformStats(ranked: any[], other: any[]) {
 		const platforms = new Map<string, number>();
 

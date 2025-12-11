@@ -77,18 +77,4 @@ export class SearchHistoryService {
 	async getTotalSearchCount(): Promise<number> {
 		return this.searchHistoryModel.countDocuments();
 	}
-
-	async getSearchStats() {
-		const total = await this.searchHistoryModel.countDocuments().exec();
-		const withUsers = await this.searchHistoryModel
-			.countDocuments({ userId: { $ne: null } })
-			.exec();
-		const anonymous = total - withUsers;
-
-		return {
-			total,
-			authenticated: withUsers,
-			anonymous,
-		};
-	}
 }

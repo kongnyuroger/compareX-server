@@ -4,6 +4,7 @@ import {
 	Get,
 	NotFoundException,
 	Param,
+	Post,
 	Query,
 	Req,
 	UseGuards,
@@ -31,6 +32,11 @@ export class SearchHistoryController {
 		private readonly aiService: AiService,
 	) {}
 
+	/**
+	 * MAIN SEARCH ENDPOINT
+	 * Stores 100% of product object data
+	 * Supports anonymous + logged-in users
+	 */
 	@Get()
 	async search(
 		@Query("q") query: string,
@@ -43,36 +49,48 @@ export class SearchHistoryController {
 
 		const userId = req.user?.userId || null;
 
+		// 1️⃣ Crawl all platforms
 		const crawledProducts = await this.crawlerService.searchAllSites(query);
 
+		// 2️⃣ Rank + filter via AI
 		const rankedResults = await this.aiService.rankAndLimitProducts(
 			query,
 			crawledProducts,
 			{
-				resultsPerPlatform: searchParams.resultsPerPlatform ?? 30,
-				globalLimit: searchParams.globalLimit ?? 90,
-				minRelevanceScore: searchParams.minScore ?? 0.5,
-				sortBy: searchParams.sortBy ?? "relevance",
+				resultsPerPlatform: searchParams.resultsPerPlatform || 30,
+				globalLimit: searchParams.globalLimit || 90,
+				minRelevanceScore: searchParams.minScore || 0.5,
+				sortBy: searchParams.sortBy || "relevance",
 			},
 		);
 
+		// 3️⃣ Build platform stats for MongoDB storage
+		const platformStats =
+			rankedResults.platformStats?.map((p: any) => ({
+				platform: p.platform,
+				total: p.total,
+				kept: p.kept,
+				discarded: p.discarded,
+			})) || [];
+
+		// 4️⃣ SAVE EVERYTHING — full product data, not trimmed
 		const searchId = await this.searchHistoryService.saveSearch(
 			query,
 			userId,
 			{
-				resultsPerPlatform: searchParams.resultsPerPlatform ?? 30,
-				globalLimit: searchParams.globalLimit ?? 90,
-				minScore: searchParams.minScore ?? 0.5,
-				sortBy: searchParams.sortBy ?? "relevance",
-				balance: searchParams.balance ?? false,
+				resultsPerPlatform: searchParams.resultsPerPlatform || 30,
+				globalLimit: searchParams.globalLimit || 90,
+				minScore: searchParams.minScore || 0.5,
+				sortBy: searchParams.sortBy || "relevance",
+				balance: searchParams.balance || false,
 			},
 			{
 				totalFound: rankedResults.totalFound,
 				totalAfterFiltering: rankedResults.totalAfterFiltering,
-				platforms: rankedResults.platformStats?.map((s: any) => s.platform),
+				platformStats,
 			},
-			rankedResults.rankedProducts,
-			rankedResults.otherProducts,
+			rankedResults.rankedProducts, // ⬅ FULL PRODUCTS STORED
+			rankedResults.otherProducts, // ⬅ FULL PRODUCTS STORED
 		);
 
 		return {
@@ -80,6 +98,11 @@ export class SearchHistoryController {
 			...rankedResults,
 		};
 	}
+
+	/**
+	 * GET USER HISTORY
+	 * Only logged-in users can see their own history
+	 */
 	@UseGuards(AuthGuard("jwt"))
 	@Get("history")
 	async getHistory(
@@ -89,46 +112,88 @@ export class SearchHistoryController {
 	) {
 		const userId = req.user!.userId;
 
-		const validLimit = Math.min(Math.max(limit ? +limit : 50, 1), 100);
-		const validSkip = Math.max(skip ? +skip : 0, 0);
-
 		return this.searchHistoryService.getUserHistory(
 			userId,
-			validLimit,
-			validSkip,
+			limit ? +limit : 50,
+			skip ? +skip : 0,
 		);
 	}
 
-	@UseGuards(AuthGuard("jwt"))
+	/**
+	 * GET A SAVED SEARCH BY ID
+	 * Returns EXACT stored products
+	 */
 	@Get("history/:id")
 	async getSearchById(@Param("id") searchId: string, @Req() req: UserRequest) {
-		const userId = req.user!.userId;
+		const userId = req.user?.userId || null;
 
-		const originalSearch = await this.searchHistoryService.getSearchById(
+		const search = await this.searchHistoryService.getSearchById(
 			searchId,
 			userId,
 		);
 
-		if (!originalSearch) {
+		if (!search) {
 			throw new NotFoundException("Search not found");
 		}
 
 		return {
-			searchId: originalSearch.searchId,
-			query: originalSearch.query,
-			rerun: true,
-			totalFound: originalSearch.resultsSummary?.totalFound || 0,
-			totalAfterFiltering:
-				originalSearch.resultsSummary?.totalAfterFiltering || 0,
-			platforms: originalSearch.resultsSummary?.platforms || [],
-			rankedProducts: originalSearch.rankedProducts || [],
-			otherProducts: originalSearch.otherProducts || [],
-			filters: originalSearch.searchParams || {},
+			searchId: search.searchId,
+			query: search.query,
+			resultsSummary: search.resultsSummary,
+			rankedProducts: search.rankedProducts, // FULL RAW PRODUCTS
+			otherProducts: search.otherProducts, // FULL RAW PRODUCTS
+			filters: search.searchParams,
+			createdAt: search.createdAt,
 		};
 	}
 
-	@Get("stats")
-	async getStats() {
-		return this.searchHistoryService.getSearchStats();
+	/**
+	 * REPLAY SEARCH
+	 * Returns 100% raw saved data, identical to original search()
+	 */
+	@Post("history/:id/replay")
+	async replaySearch(@Param("id") searchId: string, @Req() req: UserRequest) {
+		const userId = req.user?.userId || null;
+
+		const search = await this.searchHistoryService.getSearchById(
+			searchId,
+			userId,
+		);
+
+		if (!search) {
+			throw new NotFoundException("Search not found");
+		}
+
+		// Build per-platform counts dynamically
+		const platformStats =
+			search.resultsSummary?.platformStats ||
+			this.buildPlatformStats(search.rankedProducts, search.otherProducts);
+
+		return {
+			searchId: search.searchId,
+			query: search.query,
+			resultsSummary: {
+				...search.resultsSummary,
+				platformStats,
+			},
+			rankedProducts: search.rankedProducts,
+			otherProducts: search.otherProducts,
+			filters: search.searchParams,
+			fromHistory: true,
+			originalSearchDate: search.createdAt,
+		};
+	}
+
+	private buildPlatformStats(ranked: any[], other: any[]) {
+		const platforms = new Map<string, number>();
+
+		[...ranked, ...other].forEach((p) => {
+			platforms.set(p.source, (platforms.get(p.source) || 0) + 1);
+		});
+
+		return Array.from(platforms.entries()).map(([platform, count]) => ({
+			platform,
+			count,
+		}));
 	}
 }

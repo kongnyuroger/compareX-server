@@ -10,22 +10,6 @@ export class AiController {
 		private readonly crawlerService: CrawlerService,
 	) {}
 
-	@Get("expand")
-	async expand(@Query("q") query: string): Promise<any> {
-		if (!query || query.trim().length === 0) {
-			throw new BadRequestException("Query parameter 'q' is required");
-		}
-		const crawledResults = await this.crawlerService.searchAllSites(query);
-		return crawledResults;
-	}
-	@Get("rank")
-	async rank(@Query("q") query: string): Promise<any> {
-		if (!query || query.trim().length === 0) {
-			throw new BadRequestException("Query parameter 'q' is required");
-		}
-		return this.aiService.rankProducts(query, MOCK_PRODUCTS);
-	}
-
 	@Get("compare")
 	async compareProducts(
 		@Query("q") query: string,

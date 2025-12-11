@@ -32,7 +32,6 @@ import { UsersModule } from "./users/users.module";
 	providers: [
 		AppService,
 		{
-			// Register ThrottlerGuard globally
 			provide: APP_GUARD,
 			useClass: ThrottlerGuard,
 		},

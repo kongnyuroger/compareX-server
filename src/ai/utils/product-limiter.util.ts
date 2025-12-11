@@ -19,6 +19,9 @@ export interface LimitedResults {
 	}[];
 }
 
+// Type for products with relevance score
+type ScoredProduct = CrawledProduct & { relevanceScore: number };
+
 export class ProductLimiter {
 	/**
 	 * Limit and score products from multiple platforms
@@ -58,52 +61,87 @@ export class ProductLimiter {
 			console.log(`  ${platform}: ${prods.length} products`);
 		});
 
-		const platformResults = new Map<string, CrawledProduct[]>();
-		const platformLeftovers = new Map<string, CrawledProduct[]>();
+		const platformResults = new Map<string, ScoredProduct[]>();
+		const platformLeftovers = new Map<string, ScoredProduct[]>();
 		const stats: any[] = [];
 
 		// STEP 1: Process each platform independently
 		for (const [platform, platformProducts] of byPlatform) {
 			console.log(`\nProcessing ${platform}...`);
 
-			// Calculate relevance scores
+			// Calculate relevance scores for all products
 			const scored = platformProducts.map((product) => ({
 				...product,
 				relevanceScore: ProductScorer.calculateRelevanceScore(product, query),
 			}));
 
-			// Filter by minimum score
-			const filtered = scored.filter(
-				(p) => p.relevanceScore >= minRelevanceScore,
-			);
-			console.log(
-				`  After score filter (>=${minRelevanceScore}): ${filtered.length} products`,
-			);
-
-			// Sort by relevance
-			const sortedByRelevance = filtered.sort(
+			// Sort by relevance score (highest first)
+			const sortedByRelevance = scored.sort(
 				(a, b) => b.relevanceScore - a.relevanceScore,
 			);
 
-			// Take top N per platform
-			const top = sortedByRelevance.slice(0, resultsPerPlatform);
-			const leftover = sortedByRelevance.slice(resultsPerPlatform);
+			// NEW LOGIC: Ensure we get resultsPerPlatform products when available
+			let selectedProducts: ScoredProduct[];
+			let leftoverProducts: ScoredProduct[];
 
-			platformResults.set(platform, top);
-			platformLeftovers.set(platform, leftover);
+			if (platformProducts.length <= resultsPerPlatform) {
+				// If total products <= desired amount, take all products
+				selectedProducts = sortedByRelevance;
+				leftoverProducts = [];
+				console.log(
+					`  Total products (${platformProducts.length}) <= ${resultsPerPlatform}, taking all`,
+				);
+			} else {
+				// If total products > desired amount, take top resultsPerPlatform
+				// First, filter products with score >= minRelevanceScore
+				const highScoreProducts = sortedByRelevance.filter(
+					(p) => p.relevanceScore >= minRelevanceScore,
+				);
 
-			console.log(`  Taking top ${top.length} for ${platform}`);
+				if (highScoreProducts.length >= resultsPerPlatform) {
+					// We have enough high-score products, take top resultsPerPlatform
+					selectedProducts = highScoreProducts.slice(0, resultsPerPlatform);
+					leftoverProducts = sortedByRelevance.slice(resultsPerPlatform);
+					console.log(
+						`  High-score products (${highScoreProducts.length}) >= ${resultsPerPlatform}, taking top ${resultsPerPlatform}`,
+					);
+				} else {
+					// Not enough high-score products, fill remaining slots with lower-score products
+					const lowScoreProducts = sortedByRelevance.filter(
+						(p) => p.relevanceScore < minRelevanceScore,
+					);
+					const needed = resultsPerPlatform - highScoreProducts.length;
+					const additionalProducts = lowScoreProducts.slice(0, needed);
+
+					selectedProducts = [...highScoreProducts, ...additionalProducts];
+					leftoverProducts = lowScoreProducts.slice(needed);
+
+					console.log(
+						`  High-score products: ${highScoreProducts.length}, adding ${additionalProducts.length} lower-score products to reach ${resultsPerPlatform}`,
+					);
+				}
+			}
+
+			platformResults.set(platform, selectedProducts);
+			platformLeftovers.set(platform, leftoverProducts);
+
+			console.log(
+				`  Final selection: ${selectedProducts.length} products for ${platform}`,
+			);
+			console.log(`  Leftover: ${leftoverProducts.length} products`);
 
 			stats.push({
 				platform,
 				total: platformProducts.length,
-				filtered: filtered.length,
-				final: top.length,
+				filtered: selectedProducts.filter(
+					(p) => p.relevanceScore >= minRelevanceScore,
+				).length,
+				final: selectedProducts.length,
 			});
 		}
 
 		// STEP 2: Combine all platform results
-		const allSelected: CrawledProduct[] = [];
+		const allSelected: ScoredProduct[] = [];
 		platformResults.forEach((products) => {
 			allSelected.push(...products);
 		});
@@ -134,7 +172,7 @@ export class ProductLimiter {
 		}
 
 		// No global limit needed
-		const allLeftovers: CrawledProduct[] = [];
+		const allLeftovers: ScoredProduct[] = [];
 		platformLeftovers.forEach((products) => {
 			allLeftovers.push(...products);
 		});
@@ -155,8 +193,8 @@ export class ProductLimiter {
 	 * Apply global limit with balanced distribution across platforms
 	 */
 	private static applyBalancedGlobalLimit(
-		platformResults: Map<string, CrawledProduct[]>,
-		platformLeftovers: Map<string, CrawledProduct[]>,
+		platformResults: Map<string, ScoredProduct[]>,
+		platformLeftovers: Map<string, ScoredProduct[]>,
 		globalLimit: number,
 		stats: any[],
 	): LimitedResults {
@@ -171,8 +209,8 @@ export class ProductLimiter {
 			`Balanced distribution: ${perPlatformLimit} per platform, ${remainder} extra`,
 		);
 
-		const finalSelected: CrawledProduct[] = [];
-		const allLeftovers: CrawledProduct[] = [];
+		const finalSelected: ScoredProduct[] = [];
+		const allLeftovers: ScoredProduct[] = [];
 
 		// First, add leftover products
 		platformLeftovers.forEach((products) => {
@@ -219,21 +257,21 @@ export class ProductLimiter {
 	 * Apply global limit based on relevance score (may favor one platform)
 	 */
 	private static applyScoreBasedGlobalLimit(
-		allSelected: CrawledProduct[],
-		platformLeftovers: Map<string, CrawledProduct[]>,
+		allSelected: ScoredProduct[],
+		platformLeftovers: Map<string, ScoredProduct[]>,
 		globalLimit: number,
 		stats: any[],
 	): LimitedResults {
 		console.log("Score-based distribution (may favor certain platforms)");
 
 		const globalSorted = [...allSelected].sort(
-			(a, b) => (b as any).relevanceScore - (a as any).relevanceScore,
+			(a, b) => b.relevanceScore - a.relevanceScore,
 		);
 
 		const finalTop = globalSorted.slice(0, globalLimit);
 		const removed = globalSorted.slice(globalLimit);
 
-		const allLeftovers: CrawledProduct[] = [];
+		const allLeftovers: ScoredProduct[] = [];
 		platformLeftovers.forEach((products) => {
 			allLeftovers.push(...products);
 		});

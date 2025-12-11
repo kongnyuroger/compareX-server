@@ -80,22 +80,29 @@ export class ProductLimiter {
 				(a, b) => b.relevanceScore - a.relevanceScore,
 			);
 
-			// NEW LOGIC: Ensure we get resultsPerPlatform products when available
 			let selectedProducts: ScoredProduct[];
 			let leftoverProducts: ScoredProduct[];
 
+			// NEW LOGIC: If total products <= 30, skip all limiting
 			if (platformProducts.length <= resultsPerPlatform) {
-				// If total products <= desired amount, take all products
 				selectedProducts = sortedByRelevance;
 				leftoverProducts = [];
 				console.log(
-					`  Total products (${platformProducts.length}) <= ${resultsPerPlatform}, taking all`,
+					`  Total products (${platformProducts.length}) <= ${resultsPerPlatform}, taking all without limiting`,
 				);
 			} else {
-				// If total products > desired amount, take top resultsPerPlatform
-				// First, filter products with score >= minRelevanceScore
+				// Total products > 30, apply limiting logic
+				console.log(
+					`  Total products (${platformProducts.length}) > ${resultsPerPlatform}, applying limiting...`,
+				);
+
+				// Filter products with score >= minRelevanceScore
 				const highScoreProducts = sortedByRelevance.filter(
 					(p) => p.relevanceScore >= minRelevanceScore,
+				);
+
+				console.log(
+					`  High-score products (>= ${minRelevanceScore}): ${highScoreProducts.length}`,
 				);
 
 				if (highScoreProducts.length >= resultsPerPlatform) {
@@ -103,21 +110,21 @@ export class ProductLimiter {
 					selectedProducts = highScoreProducts.slice(0, resultsPerPlatform);
 					leftoverProducts = sortedByRelevance.slice(resultsPerPlatform);
 					console.log(
-						`  High-score products (${highScoreProducts.length}) >= ${resultsPerPlatform}, taking top ${resultsPerPlatform}`,
+						`  High-score products sufficient, taking top ${resultsPerPlatform}`,
 					);
 				} else {
-					// Not enough high-score products, fill remaining slots with lower-score products
+					// Not enough high-score products, complete to resultsPerPlatform with next in line
+					const needed = resultsPerPlatform - highScoreProducts.length;
 					const lowScoreProducts = sortedByRelevance.filter(
 						(p) => p.relevanceScore < minRelevanceScore,
 					);
-					const needed = resultsPerPlatform - highScoreProducts.length;
 					const additionalProducts = lowScoreProducts.slice(0, needed);
 
 					selectedProducts = [...highScoreProducts, ...additionalProducts];
 					leftoverProducts = lowScoreProducts.slice(needed);
 
 					console.log(
-						`  High-score products: ${highScoreProducts.length}, adding ${additionalProducts.length} lower-score products to reach ${resultsPerPlatform}`,
+						`  High-score products: ${highScoreProducts.length}, completing with ${additionalProducts.length} lower-score products to reach ${resultsPerPlatform}`,
 					);
 				}
 			}

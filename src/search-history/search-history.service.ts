@@ -1,10 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { Model } from "mongoose";
 import { nanoid } from "nanoid";
-import {
-	SearchHistory,
-	SearchHistoryDocument,
-} from "./schemas/search-history.schema";
+import { SearchHistoryDocument } from "./schemas/search-history.schema";
 
 @Injectable()
 export class SearchHistoryService {
@@ -37,13 +34,16 @@ export class SearchHistoryService {
 		return searchId;
 	}
 
+	/**
+	 * Returns only query, searchId, and createdAt
+	 */
 	async getUserHistory(userId: string, limit = 50, skip = 0) {
 		const histories = await this.searchHistoryModel
 			.find({ userId })
 			.sort({ createdAt: -1 })
 			.limit(limit)
 			.skip(skip)
-			.select("-__v")
+			.select("query searchId createdAt") // ✅ Only select required fields
 			.lean();
 
 		const total = await this.searchHistoryModel.countDocuments({ userId });

@@ -37,6 +37,7 @@ export class SearchHistoryController {
 	 * Stores 100% of product object data
 	 * Supports anonymous + logged-in users
 	 */
+	@UseGuards(AuthGuard("jwt"))
 	@Get()
 	async search(
 		@Query("q") query: string,
@@ -110,6 +111,7 @@ export class SearchHistoryController {
 		@Query("limit") limit?: number,
 		@Query("skip") skip?: number,
 	) {
+		console.log(req.user);
 		const userId = req.user!.userId;
 
 		return this.searchHistoryService.getUserHistory(
@@ -123,9 +125,10 @@ export class SearchHistoryController {
 	 * GET A SAVED SEARCH BY ID
 	 * Returns EXACT stored products
 	 */
+	@UseGuards(AuthGuard("jwt"))
 	@Get("history/:id")
 	async getSearchById(@Param("id") searchId: string, @Req() req: UserRequest) {
-		const userId = req.user?.userId || null;
+		const userId = req.user!.userId || null;
 
 		const search = await this.searchHistoryService.getSearchById(
 			searchId,
@@ -151,5 +154,4 @@ export class SearchHistoryController {
 	async getTrending() {
 		return MOCK_PRODUCTS;
 	}
-
 }

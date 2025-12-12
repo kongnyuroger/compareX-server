@@ -37,4 +37,9 @@ export class AiController {
 			sortBy: sortBy || "relevance",
 		});
 	}
+
+	@Get("rank")
+	async rankProducts(@Query("q") query: string) {
+		return this.aiService.rankProducts(query, MOCK_PRODUCTS);
+	}
 }

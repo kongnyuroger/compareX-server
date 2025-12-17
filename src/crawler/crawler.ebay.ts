@@ -21,50 +21,31 @@ export class EbayCrawler {
 		const page = await browser.newPage();
 
 		try {
-			// Go directly to search results
 			const searchUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(
 				searchPhrase,
 			)}`;
 
 			console.log("Going directly to eBay search URL:", searchUrl);
+
 			await page.goto(searchUrl, {
 				waitUntil: "networkidle2",
 				timeout: 60000,
 			});
 
-			// Wait for results to load - eBay needs more time
+			// Allow extra time for dynamic content
 			await this.delay(5000);
 
-			const url = page.url();
-			return url;
+			return page.url();
 		} catch (error) {
 			console.error("Error in getSearchResultsUrl:", (error as Error).message);
-			// Try to take a screenshot, but don't let that throw and mask the original error
 			try {
 				await page.screenshot({ path: "ebay-error-screenshot.png" });
-			} catch (screenshotErr) {
-				console.error(
-					"Screenshot failed in getSearchResultsUrl:",
-					screenshotErr,
-				);
-			}
+			} catch {}
 			throw error;
 		} finally {
-			if (browser) {
-				try {
-					// Close only if connected to avoid errors
-					if (
-						(browser as any).isConnected ? (browser as any).isConnected() : true
-					) {
-						await browser.close();
-					}
-				} catch (closeErr) {
-					console.error(
-						"Error closing browser in getSearchResultsUrl:",
-						closeErr,
-					);
-				}
-			}
+			try {
+				await browser.close();
+			} catch {}
 		}
 	}
 
@@ -77,92 +58,77 @@ export class EbayCrawler {
 
 		try {
 			console.log("Navigating:", url);
-			await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
 
-			// Wait longer for eBay's JavaScript to render
+			await page.goto(url, {
+				waitUntil: "domcontentloaded",
+				timeout: 60000,
+			});
+
+			// eBay JS rendering delay
 			await this.delay(7000);
 
 			const data = await page.evaluate(() => {
-				// Find all product items
-				const cards = [...document.querySelectorAll("li")] as HTMLElement[];
+				const cards = Array.from(
+					document.querySelectorAll("li.s-item"),
+				) as HTMLElement[];
 
 				return cards
 					.map((card) => {
-						// Filter: must have image, link, and substantial text
-						const hasImage = !!card.querySelector("img");
-						const hasLink = !!card.querySelector("a");
-						const hasContent =
-							card.textContent && card.textContent.trim().length > 50;
+						// TITLE
+						const titleEl =
+							card.querySelector(".s-item__title") || card.querySelector("h3");
 
-						if (!hasImage || !hasLink || !hasContent) return null;
+						const title = titleEl?.textContent?.trim() || null;
+						if (!title || title.length < 5) return null;
 
-						// Title - try multiple selectors
-						const titleElement =
-							(card.querySelector(".s-item__title") as HTMLElement) ||
-							(card.querySelector("h3") as HTMLElement) ||
-							(card.querySelector('[role="heading"]') as HTMLElement);
+						// PRODUCT URL
+						const linkEl =
+							card.querySelector(".s-item__link") ||
+							card.querySelector("a[href*='/itm/']");
 
-						const title = titleElement?.innerText?.trim() || null;
+						const detailPageUrl = linkEl?.getAttribute("href") || null;
+						if (!detailPageUrl) return null;
 
-						// Skip invalid titles
-						if (
-							!title ||
-							title.length < 5 ||
-							title.toLowerCase().includes("shop on ebay")
-						) {
-							return null;
+						// IMAGE
+						const imgEl = card.querySelector("img") as HTMLImageElement;
+						const imageUrl =
+							imgEl?.getAttribute("src") ||
+							imgEl?.getAttribute("data-src") ||
+							null;
+
+						// PRICE (ROBUST)
+						let price = "N/A";
+						const priceEl =
+							card.querySelector(".s-item__price") ||
+							card.querySelector("[class*='price']");
+
+						if (priceEl) {
+							price = priceEl.textContent?.replace(/\s+/g, " ").trim() || "N/A";
 						}
 
-						// Product URL
-						const linkElement =
-							card.querySelector(".s-item__link") ||
-							card.querySelector("a[href*='/itm/']") ||
-							card.querySelector("a[href]");
-						const detailLink = linkElement?.getAttribute("href") || "N/A";
-
-						// Image
-						const imageElement = card.querySelector("img") as HTMLImageElement;
-						const imageLink =
-							imageElement?.src ||
-							imageElement?.getAttribute("data-src") ||
-							"N/A";
-
-						// Price
-						const priceElement = card.querySelector(
-							".s-item__price",
-						) as HTMLElement;
-						const price = priceElement?.innerText?.trim() || "N/A";
-
-						// Condition
-						let condition = "N/A";
+						// CONDITION
 						const text = card.textContent || "";
-						if (text.includes("Brand New")) condition = "Brand New";
-						else if (text.includes("New")) condition = "New";
-						else if (text.includes("Used")) condition = "Used";
-						else if (text.includes("Refurbished")) condition = "Refurbished";
-						else if (text.includes("Pre-Owned")) condition = "Pre-Owned";
+						let condition = "N/A";
+						if (/Brand New/i.test(text)) condition = "Brand New";
+						else if (/New/i.test(text)) condition = "New";
+						else if (/Used/i.test(text)) condition = "Used";
+						else if (/Refurbished/i.test(text)) condition = "Refurbished";
+						else if (/Pre-Owned/i.test(text)) condition = "Pre-Owned";
 
-						// Shipping
-						const shippingElement = card.querySelector(
-							".s-item__shipping",
-						) as HTMLElement;
+						// SHIPPING
+						const shippingEl = card.querySelector(".s-item__shipping");
 						const shipping =
-							shippingElement?.innerText?.trim() ||
+							shippingEl?.textContent?.trim() ||
 							(text.includes("Free shipping") ? "Free shipping" : "N/A");
 
-						// Sponsored
-						const isSponsored =
-							text.includes("SPONSORED") || text.includes("Sponsored")
-								? "yes"
-								: "no";
-
-						// Buy It Now
-						const isBuyItNow = text.includes("Buy It Now") ? "yes" : "no";
+						// FLAGS
+						const isSponsored = /Sponsored/i.test(text);
+						const isBuyItNow = /Buy It Now/i.test(text);
 
 						return {
 							title,
-							detailPageUrl: detailLink,
-							imageUrl: imageLink,
+							detailPageUrl,
+							imageUrl,
 							price,
 							condition,
 							shipping,
@@ -173,9 +139,12 @@ export class EbayCrawler {
 					.filter(Boolean);
 			});
 
-			// Get next page URL
+			// NEXT PAGE
 			const nextPageUrl = await page.evaluate(() => {
-				const nextBtn = document.querySelector("a.pagination__next");
+				const nextBtn = document.querySelector(
+					"a.pagination__next",
+				) as HTMLAnchorElement;
+
 				return nextBtn && !nextBtn.hasAttribute("aria-disabled")
 					? nextBtn.getAttribute("href")
 					: null;
@@ -184,52 +153,35 @@ export class EbayCrawler {
 			return { data, nextPageUrl };
 		} catch (error) {
 			console.error("Error in scrapePage:", (error as Error).message);
-			// Attempt screenshot but don't let it block error handling
 			try {
-				await page.screenshot({ path: `ebay-error-page-${Date.now()}.png` });
-			} catch (screenshotErr) {
-				console.error("Screenshot failed in scrapePage:", screenshotErr);
-			}
+				await page.screenshot({ path: `ebay-error-${Date.now()}.png` });
+			} catch {}
 			throw error;
 		} finally {
-			if (browser) {
-				try {
-					if (
-						(browser as any).isConnected ? (browser as any).isConnected() : true
-					) {
-						await browser.close();
-					}
-				} catch (closeErr) {
-					console.error("Error closing browser in scrapePage:", closeErr);
-				}
-			}
+			try {
+				await browser.close();
+			} catch {}
 		}
 	}
 
-	// Main search method - public interface
-	async search(query: string, maxPages: number = 2): Promise<CrawledProduct[]> {
+	// PUBLIC SEARCH API
+	async search(query: string, maxPages = 2): Promise<CrawledProduct[]> {
 		try {
 			console.log("eBay Search:", query);
 			console.log("Max pages:", maxPages);
 			console.log("------------------------------------");
 
-			// Get search results URL
 			let currentUrl = await this.getSearchResultsUrl(query);
-
 			const allData: any[] = [];
 
-			// Loop through pages
 			for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
-				console.log(`\nScraping eBay Page ${pageNum}...`);
+				console.log(`Scraping eBay Page ${pageNum}`);
 
 				const { data, nextPageUrl } = await this.scrapePage(currentUrl);
 
 				allData.push(...data);
 
-				if (!nextPageUrl) {
-					console.log("No more pages. Stopping.");
-					break;
-				}
+				if (!nextPageUrl) break;
 
 				currentUrl = nextPageUrl.startsWith("http")
 					? nextPageUrl
@@ -238,11 +190,8 @@ export class EbayCrawler {
 				await this.delay(2000);
 			}
 
-			console.log(
-				`\neBay scraping finished. Found ${allData.length} products.\n`,
-			);
+			console.log(`eBay scraping finished. ${allData.length} items`);
 
-			// Transform to CrawledProduct format
 			return this.transformResults(allData);
 		} catch (error) {
 			console.error("Error in eBay search:", error);
@@ -250,67 +199,50 @@ export class EbayCrawler {
 		}
 	}
 
-	// Transform eBay results to match CrawledProduct interface
+	// TRANSFORM RESULTS
 	private transformResults(rawData: any[]): CrawledProduct[] {
 		return rawData.map((item) => ({
 			title: item.title,
 			price: this.parsePrice(item.price),
-			currency: this.parseCurrency(item.price), // { changed code }
-			imageUrl: item.imageUrl !== "N/A" ? item.imageUrl : undefined,
-			productUrl:
-				item.detailPageUrl !== "N/A"
-					? item.detailPageUrl.startsWith("http")
-						? item.detailPageUrl
-						: `https://www.ebay.com${item.detailPageUrl}`
-					: undefined,
+			currency: this.parseCurrency(item.price),
+			imageUrl: item.imageUrl || undefined,
+			productUrl: item.detailPageUrl
+				? item.detailPageUrl.startsWith("http")
+					? item.detailPageUrl
+					: `https://www.ebay.com${item.detailPageUrl}`
+				: undefined,
 			source: "eBay",
 			condition: item.condition !== "N/A" ? item.condition : undefined,
 			shipping: item.shipping !== "N/A" ? item.shipping : undefined,
-			isSponsored: item.isSponsored === "yes",
-			isBuyItNow: item.isBuyItNow === "yes",
+			isSponsored: item.isSponsored,
+			isBuyItNow: item.isBuyItNow,
 		}));
 	}
 
-	// Helper to parse price strings like "$299.99" to number
-	private parsePrice(priceString: string): number | undefined {
+	// PRICE PARSER (handles ranges)
+	private parsePrice(priceString?: string): number | undefined {
 		if (!priceString || priceString === "N/A") return undefined;
 
-		const match = priceString.match(/[\d,]+\.?\d*/);
-		if (match) {
-			return parseFloat(match[0].replace(/,/g, ""));
-		}
-		return undefined;
+		const numbers = priceString.match(/[\d,]+\.?\d*/g);
+		if (!numbers || numbers.length === 0) return undefined;
+
+		return Math.min(...numbers.map((n) => parseFloat(n.replace(/,/g, ""))));
 	}
 
-	// Helper to extract currency code from price string, fallback to 'USD'
+	// CURRENCY PARSER
 	private parseCurrency(priceString?: string): string {
 		if (!priceString) return "USD";
 
-		// Check for explicit currency codes
-		const codeMatch = priceString.match(
-			/\b(USD|EUR|GBP|JPY|AUD|CAD|CNY|INR|CHF|KRW|RUB)\b/i,
-		);
-		if (codeMatch) return codeMatch[1].toUpperCase();
-
-		// Symbols and common patterns
 		if (priceString.includes("€")) return "EUR";
 		if (priceString.includes("£")) return "GBP";
-		// Handle Yen vs Yuan: prioritize CNY if indicated, otherwise JPY
-		if (/[¥￥]/.test(priceString)) {
-			if (/C\s*¥|CNY|CN¥/i.test(priceString)) return "CNY";
-			return "JPY";
-		}
+		if (/[¥￥]/.test(priceString)) return "JPY";
 		if (priceString.includes("₹")) return "INR";
-		if (/A\s*\$|^A\$|AUD/i.test(priceString)) return "AUD";
-		if (/C\s*\$|^C\$|CAD/i.test(priceString)) return "CAD";
-		if (priceString.includes("CHF")) return "CHF";
+		if (/A\s*\$|^A\$/.test(priceString)) return "AUD";
+		if (/C\s*\$|^C\$/.test(priceString)) return "CAD";
 		if (priceString.includes("₩")) return "KRW";
 		if (priceString.includes("₽")) return "RUB";
-
-		// Dollar sign fallback -> USD
 		if (priceString.includes("$")) return "USD";
 
-		// Default fallback
 		return "USD";
 	}
 }

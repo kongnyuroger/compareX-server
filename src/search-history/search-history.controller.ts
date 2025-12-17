@@ -37,7 +37,7 @@ export class SearchHistoryController {
 	 * Stores 100% of product object data
 	 * Supports anonymous + logged-in users
 	 */
-	@UseGuards(AuthGuard("jwt"))
+
 	@Get()
 	async search(
 		@Query("q") query: string,

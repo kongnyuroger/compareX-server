@@ -450,22 +450,42 @@ export class WalmartCrawler {
 		}));
 	}
 
-	// Helper to parse price strings
+	// FIXED: Helper to parse price strings like "$299.99" to number
 	private parsePrice(priceString: string): number | undefined {
 		if (!priceString || priceString === "N/A") return undefined;
 
-		const match = priceString.match(/[\d,]+\.?\d*/);
-		if (match) {
-			return parseFloat(match[0].replace(/,/g, ""));
-		}
-		return undefined;
+		// Remove common currency symbols and text, but keep numbers, commas, dots, and spaces
+		const cleanedPrice = priceString
+			.replace(/[€£¥₹₩₽]/g, "") // Remove currency symbols
+			.replace(/USD|EUR|GBP|JPY|AUD|CAD|CNY|INR|CHF|KRW|RUB/gi, "") // Remove currency codes
+			.replace(/to/gi, "") // Remove "to" for price ranges
+			.trim();
+
+		// Match all price-like patterns: numbers with optional commas and decimals
+		// This will match: 299.99, 1,299.99, 299, etc.
+		const priceMatches = cleanedPrice.match(
+			/\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?/g,
+		);
+
+		if (!priceMatches || priceMatches.length === 0) return undefined;
+
+		// For price ranges, take the first (lowest) price
+		const firstPrice = priceMatches[0];
+
+		// Remove commas and parse to float
+		const parsedPrice = parseFloat(firstPrice.replace(/,/g, ""));
+
+		// Validate the parsed price
+		if (isNaN(parsedPrice) || parsedPrice <= 0) return undefined;
+
+		return parsedPrice;
 	}
 
 	// Helper to parse rating strings
 	private parseRating(ratingString: string): number | undefined {
 		if (!ratingString || ratingString === "N/A") return undefined;
 
-		const match = ratingString.match(/(\d+\.?\d*)/);
+		const match = ratingString.match(/(\d+\.?\d*)\s+out\s+of/i);
 		if (match) {
 			return parseFloat(match[1]);
 		}

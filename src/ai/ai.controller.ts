@@ -27,7 +27,7 @@ export class AiController {
 		}
 
 		// Crawl products from all sites
-		const crawledProducts = await this.crawlerService.searchAllSites(query);
+		const crawledProducts = await this.crawlerService.searchEbay(query, 1);
 
 		// Apply intelligent limiting, scoring, and AI ranking
 		return this.aiService.rankAndLimitProducts(query, crawledProducts, {

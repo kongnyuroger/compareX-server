@@ -226,10 +226,14 @@ export class AmazonCrawler {
 	private parsePrice(priceString: string): number | undefined {
 		if (!priceString || priceString === "N/A") return undefined;
 
-		const match = priceString.match(/[\d,]+\.?\d*/);
+		// Remove commas first
+		const cleaned = priceString.replace(/,/g, "");
+
+		const match = cleaned.match(/\d+(\.\d+)?/);
 		if (match) {
-			return parseFloat(match[0].replace(/,/g, ""));
+			return parseFloat(match[0]);
 		}
+
 		return undefined;
 	}
 

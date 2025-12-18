@@ -246,4 +246,4 @@ export class EbayCrawler {
 		return "USD";
 	}
 }
-// End of src/crawler/crawler.ebay.ts
+// End of src/crawler/crawler

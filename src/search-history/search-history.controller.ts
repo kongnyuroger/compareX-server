@@ -111,7 +111,6 @@ export class SearchHistoryController {
 		@Query("limit") limit?: number,
 		@Query("skip") skip?: number,
 	) {
-		console.log(req.user);
 		const userId = req.user!.userId;
 
 		return this.searchHistoryService.getUserHistory(

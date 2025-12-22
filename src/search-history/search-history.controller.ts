@@ -55,15 +55,9 @@ export class SearchHistoryController {
 		const crawledProducts = await this.crawlerService.searchAllSites(query);
 
 		// Rank + filter via AI
-		const rankedResults = await this.aiService.rankAndLimitProducts(
+		const rankedResults = await this.aiService.rankProducts(
 			query,
 			crawledProducts,
-			{
-				resultsPerPlatform: searchParams.resultsPerPlatform || 30,
-				globalLimit: searchParams.globalLimit || 90,
-				minRelevanceScore: searchParams.minScore || 0.5,
-				sortBy: searchParams.sortBy || "relevance",
-			},
 		);
 
 		// Build platform stats for MongoDB storage
@@ -71,28 +65,14 @@ export class SearchHistoryController {
 			rankedResults.platformStats?.map((p: any) => ({
 				platform: p.platform,
 				total: p.total,
-				kept: p.kept,
-				discarded: p.discarded,
 			})) || [];
 
 		// SAVE EVERYTHING – full product data with userId
 		const searchId = await this.searchHistoryService.saveSearch(
 			query,
 			userId,
-			{
-				resultsPerPlatform: searchParams.resultsPerPlatform || 30,
-				globalLimit: searchParams.globalLimit || 90,
-				minScore: searchParams.minScore || 0.5,
-				sortBy: searchParams.sortBy || "relevance",
-				balance: searchParams.balance || false,
-			},
-			{
-				totalFound: rankedResults.totalFound,
-				totalAfterFiltering: rankedResults.totalAfterFiltering,
-				platformStats,
-			},
-			rankedResults.rankedProducts,
-			rankedResults.otherProducts,
+			searchParams,
+			rankedResults,
 		);
 
 		return {

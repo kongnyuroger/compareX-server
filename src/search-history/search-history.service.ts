@@ -14,9 +14,7 @@ export class SearchHistoryService {
 		query: string,
 		userId: string | null,
 		searchParams?: any,
-		resultsSummary?: any,
 		rankedProducts?: any[],
-		otherProducts?: any[],
 	): Promise<string> {
 		const searchId = nanoid(12);
 
@@ -25,9 +23,7 @@ export class SearchHistoryService {
 			query,
 			userId: userId || null,
 			searchParams: searchParams || null,
-			resultsSummary: resultsSummary || null,
 			rankedProducts: rankedProducts || [],
-			otherProducts: otherProducts || [],
 		});
 
 		await searchHistory.save();

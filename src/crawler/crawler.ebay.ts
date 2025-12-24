@@ -1,5 +1,6 @@
 // src/crawler/crawler.ebay.ts
 
+import { nanoid } from "nanoid";
 import puppeteer, { Browser } from "puppeteer-core";
 import { Observable, Observer } from "rxjs";
 import { IBaseCrawler } from "./types/base-crawler.interface";
@@ -249,6 +250,7 @@ export class EbayCrawler implements IBaseCrawler {
 
 	private transformProduct(raw: ScrapedEbayProduct): CrawledProduct {
 		return {
+			id: nanoid(),
 			title: raw.title,
 			price: this.parsePrice(raw.price),
 			currency: "USD",

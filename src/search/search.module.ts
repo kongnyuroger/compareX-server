@@ -1,15 +1,30 @@
 // src/search/search.module.ts
 
 import { Module } from "@nestjs/common";
+import { MongooseModule } from "@nestjs/mongoose";
 import { AiModule } from "src/ai/ai.module";
 import { CrawlerModule } from "src/crawler/crawler.module";
-import { SearchOrchestratorService } from "./search-orchestrator.service";
+import {
+	CrawlSession,
+	CrawlSessionSchema,
+} from "./schemas/crawl-session.schema";
 import { SearchStreamController } from "./search-stream.controller";
+import { CrawlSessionService } from "./services/crawl-session.service";
+import { SearchOrchestratorService } from "./services/search-orchestrator.service";
 
 @Module({
-	imports: [CrawlerModule, AiModule],
+	imports: [
+		MongooseModule.forFeature([
+			{
+				name: CrawlSession.name,
+				schema: CrawlSessionSchema,
+			},
+		]),
+		CrawlerModule,
+		AiModule,
+	],
 	controllers: [SearchStreamController],
-	providers: [SearchOrchestratorService],
-	exports: [SearchOrchestratorService],
+	providers: [SearchOrchestratorService, CrawlSessionService],
+	exports: [CrawlSessionService],
 })
 export class SearchModule {}

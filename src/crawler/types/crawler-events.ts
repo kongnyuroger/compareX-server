@@ -1,5 +1,7 @@
 // src/crawler/types/crawler-events.ts
 
+import { CrawledProduct } from "./crawler.types";
+
 export enum CrawlerEventType {
 	PRODUCT = "product",
 	PAGE_COMPLETE = "page_complete",
@@ -10,7 +12,7 @@ export enum CrawlerEventType {
 export interface ProductEvent {
 	type: CrawlerEventType.PRODUCT;
 	source: string;
-	product: CrawledProduct;
+	product: CrawledProduct; // Now includes 'id'
 	timestamp: number;
 }
 

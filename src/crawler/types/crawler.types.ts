@@ -1,6 +1,7 @@
 // src/crawler/types/crawler.types.ts
 
 export interface CrawledProduct {
+	id: string; // ← NEW: Unique identifier
 	title: string;
 	price?: number;
 	currency?: string;
@@ -8,25 +9,31 @@ export interface CrawledProduct {
 	productUrl?: string;
 	source: string;
 
-	// Amazon-specific
+	// Platform-specific fields
 	rating?: number;
 	reviewCount?: number;
 	isSponsored?: boolean;
 	badge?: string;
 	basePrice?: number;
-
-	// Alibaba-specific
 	supplier?: string;
-	moq?: string; // Minimum Order Quantity
+	moq?: string;
 	hasTradeAssurance?: boolean;
-	// Walmart-specific
 	hasFreeShipping?: boolean;
 	hasWalmartPlus?: boolean;
+	condition?: string;
+	shipping?: string;
+	seller?: string;
+	watchCount?: string;
+	isBuyItNow?: boolean;
+}
 
-	// eBay-specific
-	condition?: string; // New, Used, Refurbished, etc.
-	shipping?: string; // Shipping cost or "Free shipping"
-	seller?: string; // Seller name
-	watchCount?: string; // How many people are watching
-	isBuyItNow?: boolean; // Buy It Now vs Auction
+// Product with metadata for AI ranking
+export interface RankableProduct {
+	id: string;
+	title: string;
+	price?: number;
+	rating?: number;
+	reviewCount?: number;
+	source: string;
+	isSponsored?: boolean;
 }

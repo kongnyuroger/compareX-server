@@ -7,6 +7,7 @@ import { AiModule } from "./ai/ai.module";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { CrawlerModule } from "./crawler/crawler.module";
+import { SearchModule } from "./search/search.module";
 import { SearchHistoryModule } from "./search-history/search-history.module";
 import { UsersModule } from "./users/users.module";
 
@@ -26,6 +27,7 @@ import { UsersModule } from "./users/users.module";
 		]),
 		AiModule,
 		CrawlerModule,
+		SearchModule,
 		SearchHistoryModule,
 	],
 	controllers: [AppController],

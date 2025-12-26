@@ -1,6 +1,7 @@
 // src/search/search.module.ts
 
 import { Module } from "@nestjs/common";
+import { JwtModule } from "@nestjs/jwt"; // ← Add this
 import { MongooseModule } from "@nestjs/mongoose";
 import { AiModule } from "src/ai/ai.module";
 import { CrawlerModule } from "src/crawler/crawler.module";
@@ -20,6 +21,10 @@ import { SearchOrchestratorService } from "./services/search-orchestrator.servic
 				schema: CrawlSessionSchema,
 			},
 		]),
+		JwtModule.register({
+			secret: process.env.JWT_SECRET || "your-secret-key",
+			signOptions: { expiresIn: "7d" },
+		}),
 		CrawlerModule,
 		AiModule,
 	],

@@ -10,7 +10,10 @@ import {
 	Query,
 	Req,
 	Sse,
+	UnauthorizedException,
+	UseGuards,
 } from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
 import { map, Observable } from "rxjs";
 import { CrawlerService } from "src/crawler/crawler.service";
 import { CrawlSessionService } from "./services/crawl-session.service";
@@ -30,28 +33,46 @@ export class SearchStreamController {
 		private readonly crawlerService: CrawlerService,
 		private readonly orchestrator: SearchOrchestratorService,
 		private readonly crawlSessionService: CrawlSessionService,
+		private readonly jwtService: JwtService, // Inject JwtService
 	) {}
 
 	/**
 	 * SSE endpoint for streaming search results
-	 * Creates a crawl session and stores all products in MongoDB
+	 * Accepts token as query parameter for EventSource compatibility
 	 *
-	 * Usage: GET /search/stream?q=iphone
+	 * Usage: GET /search/stream?q=iphone&token=JWT_TOKEN
 	 */
 	@Sse("stream")
 	async streamSearch(
 		@Query("q") query: string,
-		@Req() req: UserRequest,
+		@Query("token") token?: string,
 	): Promise<Observable<MessageEvent>> {
 		if (!query || query.trim().length === 0) {
 			throw new BadRequestException('Query parameter "q" is required');
 		}
 
-		const userId = req.user?.userId || null;
+		// Validate authentication token
+		if (!token) {
+			throw new UnauthorizedException("Authentication token required");
+		}
 
-		console.log(
-			`🚀 Starting SSE stream for query: "${query}" (userId: ${userId || "anonymous"})`,
-		);
+		let userId: string | null = null;
+
+		try {
+			// Verify JWT token
+			const payload = await this.jwtService.verifyAsync(token, {
+				secret: process.env.JWT_SECRET || "your-secret-key",
+			});
+
+			userId = payload.userId || payload.sub || null;
+
+			console.log(
+				`🚀 Starting SSE stream for query: "${query}" (userId: ${userId || "anonymous"})`,
+			);
+		} catch (error) {
+			console.error("Token verification failed:", error);
+			throw new UnauthorizedException("Invalid or expired token");
+		}
 
 		// Create crawl session in database
 		const searchId = await this.crawlSessionService.createSession(
@@ -90,7 +111,7 @@ export class SearchStreamController {
 
 	/**
 	 * Get historical search results by searchId
-	 * Returns full products in ranked order from MongoDB
+	 * Standard REST endpoint with JWT guard
 	 */
 	@Get("results/:searchId")
 	async getSearchResults(
@@ -119,7 +140,7 @@ export class SearchStreamController {
 			status: session.status,
 			platformStats: session.platformStats,
 			totalProducts: rankedProducts.length,
-			rankedProducts, // Full product objects in ranked order
+			rankedProducts,
 			metadata: session.metadata,
 			createdAt: session.createdAt,
 			completedAt: session.completedAt,

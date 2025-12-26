@@ -28,7 +28,7 @@ interface UserRequest extends Request {
 	};
 }
 
-@Controller("search")
+@Controller("searchHistory")
 export class SearchHistoryController {
 	constructor(
 		private readonly searchHistoryService: SearchHistoryService,

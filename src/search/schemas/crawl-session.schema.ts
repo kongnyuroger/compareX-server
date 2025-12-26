@@ -15,7 +15,7 @@ export class CrawlSession {
 	query: string;
 
 	@Prop({ index: true })
-	userId: string | null;
+	userId?: string;
 
 	@Prop({ type: [String], default: [] })
 	rankedProductIds: string[];

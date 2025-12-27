@@ -14,6 +14,7 @@ import {
 	UseGuards,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
+import { AuthGuard } from "@nestjs/passport";
 import { map, Observable } from "rxjs";
 import { CrawlerService } from "src/crawler/crawler.service";
 import { CrawlSessionService } from "./services/crawl-session.service";
@@ -113,6 +114,7 @@ export class SearchStreamController {
 	 * Get historical search results by searchId
 	 * Standard REST endpoint with JWT guard
 	 */
+	@UseGuards(AuthGuard("jwt"))
 	@Get("results/:searchId")
 	async getSearchResults(
 		@Param("searchId") searchId: string,
@@ -125,7 +127,7 @@ export class SearchStreamController {
 		}
 
 		// Authorization check
-		const userId = req.user?.userId || null;
+		const userId = req?.user?.userId || null;
 		if (session.userId && session.userId !== userId) {
 			throw new BadRequestException("Unauthorized");
 		}
@@ -150,6 +152,7 @@ export class SearchStreamController {
 	/**
 	 * Get user's search history
 	 */
+	@UseGuards(AuthGuard("jwt"))
 	@Get("history")
 	async getUserHistory(
 		@Query("limit") limit?: number,

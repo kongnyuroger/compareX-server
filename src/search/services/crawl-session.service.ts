@@ -166,14 +166,11 @@ export class CrawlSessionService {
 		if (!session) return [];
 
 		// Reconstruct products in ranked order
-		const productsMap = session?.products as unknown as Map<
-			string,
-			CrawledProduct
-		>;
+		const products = session.products as Record<string, CrawledProduct>;
 		const rankedProducts: CrawledProduct[] = [];
 
 		for (const productId of session.rankedProductIds) {
-			const product = productsMap.get(productId);
+			const product = products[productId];
 			if (product) {
 				rankedProducts.push(product);
 			}

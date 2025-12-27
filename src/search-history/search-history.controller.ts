@@ -14,6 +14,7 @@ import { AuthGuard } from "@nestjs/passport";
 import { Request } from "express";
 import { lastValueFrom } from "rxjs";
 import { AiService } from "src/ai/ai.services";
+import { MOCK_PRODUCTS } from "src/ai/constants/mock-products";
 import { CrawlerService } from "src/crawler/crawler.service";
 import { CrawledProduct } from "src/crawler/types/crawler.types";
 import { CrawlerEventType } from "src/crawler/types/crawler-events";
@@ -136,6 +137,7 @@ export class SearchHistoryController {
 	@UseGuards(AuthGuard("jwt"))
 	@Get("history/:id")
 	async getSearchById(@Param("id") searchId: string, @Req() req: UserRequest) {
+		console.log("session user:", req.user);
 		const userId = req.user!.userId || null;
 
 		const search = await this.searchHistoryService.getSearchById(
@@ -162,8 +164,7 @@ export class SearchHistoryController {
 	async getTrending() {
 		// Return mock data or implement trending logic
 		return {
-			trending: [],
-			message: "Trending searches not yet implemented",
+			trending: MOCK_PRODUCTS,
 		};
 	}
 }

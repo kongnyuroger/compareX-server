@@ -49,3 +49,9 @@ export interface SearchStreamMessage {
 	event: "product" | "stats" | "complete" | "error";
 	data: unknown;
 }
+// ← NEW: Scored ranking interface
+export interface ProductScore {
+	productId: string;
+	relevanceScore: number; // 0-100
+	aiReasoning?: string; // Optional explanation
+}

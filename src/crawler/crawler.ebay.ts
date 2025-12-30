@@ -151,7 +151,9 @@ export class EbayCrawler implements IBaseCrawler {
 			await this.delay(7000);
 
 			const data = await page.evaluate(() => {
-				const cards = [...document.querySelectorAll("li")] as HTMLElement[];
+				const cards = [
+					...document.querySelectorAll("li.s-item"),
+				] as HTMLElement[];
 
 				return cards
 					.map((card) => {
@@ -271,7 +273,13 @@ export class EbayCrawler implements IBaseCrawler {
 
 	private parsePrice(priceString: string): number | undefined {
 		if (!priceString || priceString === "N/A") return undefined;
-		const match = priceString.match(/[\d,]+\.?\d*/);
-		return match ? parseFloat(match[0].replace(/,/g, "")) : undefined;
+
+		const cleaned = priceString.replace(/[^\d.,]/g, " ");
+		const matches = cleaned.match(/[\d,]+\.?\d*/g);
+
+		if (!matches || matches.length === 0) return undefined;
+
+		// Take the lowest price if it's a range
+		return Math.min(...matches.map((p) => parseFloat(p.replace(/,/g, ""))));
 	}
 }

@@ -135,6 +135,8 @@ export class SearchStreamController {
 		// Get ranked products from MongoDB
 		const rankedProducts =
 			await this.crawlSessionService.getRankedProducts(searchId);
+		const productScores =
+			await this.crawlSessionService.getProductScores(searchId);
 
 		return {
 			searchId: session.searchId,
@@ -143,6 +145,7 @@ export class SearchStreamController {
 			platformStats: session.platformStats,
 			totalProducts: rankedProducts.length,
 			rankedProducts,
+			productScores,
 			metadata: session.metadata,
 			createdAt: session.createdAt,
 			completedAt: session.completedAt,

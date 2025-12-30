@@ -5,6 +5,7 @@ import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { nanoid } from "nanoid";
 import { CrawledProduct } from "src/crawler/types/crawler.types";
+import { ProductScore } from "src/crawler/types/crawler-events";
 import {
 	CrawlSession,
 	CrawlSessionDocument,
@@ -85,6 +86,27 @@ export class CrawlSessionService {
 
 		console.log(
 			`📝 Appended ${productIds.length} ranked product IDs to session ${searchId}`,
+		);
+	}
+
+	/**
+	 * ← NEW: Append product scores
+	 */
+	async appendProductScores(
+		searchId: string,
+		scores: ProductScore[],
+	): Promise<void> {
+		if (scores.length === 0) return;
+
+		await this.crawlSessionModel.updateOne(
+			{ searchId },
+			{
+				$push: { productScores: { $each: scores } },
+			},
+		);
+
+		console.log(
+			`🎯 Appended ${scores.length} product scores to session ${searchId}`,
 		);
 	}
 
@@ -177,6 +199,19 @@ export class CrawlSessionService {
 		}
 
 		return rankedProducts;
+	}
+
+	/**
+	 * ← NEW: Get product scores
+	 */
+	async getProductScores(searchId: string): Promise<ProductScore[]> {
+		const session = await this.crawlSessionModel
+			.findOne({ searchId })
+			.select("productScores")
+			.lean()
+			.exec();
+
+		return session?.productScores || [];
 	}
 
 	/**

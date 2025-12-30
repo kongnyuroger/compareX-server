@@ -134,14 +134,35 @@ export class WalmartCrawler implements IBaseCrawler {
 			await this.delay(5000);
 
 			const url = page.url();
-			await browser.close();
 			return url;
 		} catch (error) {
-			await page
-				.screenshot({ path: "walmart-error-screenshot.png" })
-				.catch(() => {});
-			await browser.close();
+			console.error("Error in getSearchResultsUrl:", (error as Error).message);
+			// Try to take a screenshot, but don't let that throw and mask the original error
+			try {
+				await page.screenshot({ path: "walmart-error-screenshot.png" });
+			} catch (screenshotErr) {
+				console.error(
+					"Screenshot failed in getSearchResultsUrl:",
+					screenshotErr,
+				);
+			}
 			throw error;
+		} finally {
+			if (browser) {
+				try {
+					// Close only if connected to avoid errors
+					if (
+						(browser as any).isConnected ? (browser as any).isConnected() : true
+					) {
+						await browser.close();
+					}
+				} catch (closeErr) {
+					console.error(
+						"Error closing browser in getSearchResultsUrl:",
+						closeErr,
+					);
+				}
+			}
 		}
 	}
 
@@ -161,18 +182,23 @@ export class WalmartCrawler implements IBaseCrawler {
 			await this.delay(5000);
 
 			const data = await page.evaluate(() => {
-				const allDivs = [...document.querySelectorAll("div")] as HTMLElement[];
+				// Use more specific selectors to target actual product cards and avoid duplicates
+				const productCards = [
+					...document.querySelectorAll("[data-item-id]"), // Walmart product cards have data-item-id
+					...document.querySelectorAll('[data-automation-id="product-card"]'),
+					...document.querySelectorAll(".search-result-gridview-item"),
+				] as HTMLElement[];
 
-				const productCards = allDivs.filter((div) => {
-					const hasImage = !!div.querySelector("img");
-					const hasLink = !!div.querySelector("a");
-					const hasPrice =
-						div.textContent?.includes("$") ||
-						!!div.querySelector('[class*="price"]');
-					return hasImage && hasLink && hasPrice;
+				// Remove duplicates by data-item-id if available
+				const seen = new Set<string>();
+				const uniqueCards = productCards.filter((card) => {
+					const itemId = card.getAttribute("data-item-id");
+					if (itemId && seen.has(itemId)) return false;
+					if (itemId) seen.add(itemId);
+					return true;
 				});
 
-				return productCards
+				return uniqueCards
 					.map((card) => {
 						try {
 							let title = "";
@@ -274,14 +300,28 @@ export class WalmartCrawler implements IBaseCrawler {
 					: null;
 			});
 
-			await browser.close();
 			return { data, nextPageUrl };
 		} catch (error) {
-			await page
-				.screenshot({ path: `walmart-error-page-${Date.now()}.png` })
-				.catch(() => {});
-			await browser.close();
+			console.error("Error in scrapePage:", (error as Error).message);
+			// Attempt screenshot but don't let it block error handling
+			try {
+				await page.screenshot({ path: `walmart-error-page-${Date.now()}.png` });
+			} catch (screenshotErr) {
+				console.error("Screenshot failed in scrapePage:", screenshotErr);
+			}
 			throw error;
+		} finally {
+			if (browser) {
+				try {
+					if (
+						(browser as any).isConnected ? (browser as any).isConnected() : true
+					) {
+						await browser.close();
+					}
+				} catch (closeErr) {
+					console.error("Error closing browser in scrapePage:", closeErr);
+				}
+			}
 		}
 	}
 

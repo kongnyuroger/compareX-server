@@ -9,6 +9,7 @@ import {
 	CrawlerEvent,
 	CrawlerEventType,
 	ProductEvent,
+	ProductScore,
 	SearchStreamMessage,
 } from "src/crawler/types/crawler-events";
 import { CrawlSessionService } from "./crawl-session.service";
@@ -27,9 +28,6 @@ export class SearchOrchestratorService {
 		private readonly crawlSessionService: CrawlSessionService,
 	) {}
 
-	/**
-	 * Orchestrates the search flow with MongoDB storage
-	 */
 	orchestrateSearch(
 		searchId: string,
 		query: string,
@@ -39,48 +37,38 @@ export class SearchOrchestratorService {
 
 		const platformStats: PlatformStats = {};
 		const productBuffer: CrawledProduct[] = [];
-		const seenProductIds = new Set<string>(); // Prevent duplicates
+		const seenProductIds = new Set<string>();
 		let completedCrawlers = 0;
 		const totalCrawlers = 3;
 		const startTime = Date.now();
 
-		// Subscribe to crawler events
 		crawlerEvents$.subscribe({
 			next: async (event) => {
 				if (event.type === CrawlerEventType.PRODUCT) {
 					const productEvent = event as ProductEvent;
 
-					// Assign unique ID if not present
 					if (!productEvent.product.id) {
 						productEvent.product.id = nanoid(16);
 					}
 
-					// Skip duplicates (can happen if same product on multiple pages)
 					if (seenProductIds.has(productEvent.product.id)) {
-						console.log(
-							`⚠️  Skipping duplicate product: ${productEvent.product.id}`,
-						);
 						return;
 					}
 					seenProductIds.add(productEvent.product.id);
 
-					// Add to buffer for batching
 					productBuffer.push(productEvent.product);
 
-					// Update platform stats
 					if (!platformStats[productEvent.source]) {
 						platformStats[productEvent.source] = { total: 0, completed: false };
 					}
 					platformStats[productEvent.source].total++;
 
-					// Update DB stats
 					await this.crawlSessionService.updatePlatformStats(
 						searchId,
 						productEvent.source,
 						platformStats[productEvent.source].total,
 					);
 
-					// Batch processing: rank and store every 10 products
 					if (productBuffer.length >= 10) {
 						await this.rankAndStoreBatch(
 							searchId,
@@ -90,7 +78,6 @@ export class SearchOrchestratorService {
 						);
 					}
 				} else if (event.type === CrawlerEventType.PAGE_COMPLETE) {
-					// Emit progress update
 					messageSubject.next({
 						event: "stats",
 						data: {
@@ -104,7 +91,6 @@ export class SearchOrchestratorService {
 					platformStats[event.source].completed = true;
 					completedCrawlers++;
 
-					// Rank and store remaining products from this crawler
 					if (productBuffer.length > 0) {
 						await this.rankAndStoreBatch(
 							searchId,
@@ -114,20 +100,17 @@ export class SearchOrchestratorService {
 						);
 					}
 
-					// If all crawlers done, finalize
 					if (completedCrawlers === totalCrawlers) {
 						const totalProducts = Object.values(platformStats).reduce(
 							(sum, stat) => sum + stat.total,
 							0,
 						);
 
-						// Mark session as completed
 						await this.crawlSessionService.completeSession(searchId, {
 							totalProducts,
 							crawlDurationMs: Date.now() - startTime,
 						});
 
-						// Send completion message
 						messageSubject.next({
 							event: "complete",
 							data: {
@@ -177,7 +160,7 @@ export class SearchOrchestratorService {
 	}
 
 	/**
-	 * Rank a batch of products, store in DB, and emit
+	 * Rank a batch of products, store in DB with scores, and emit
 	 */
 	private async rankAndStoreBatch(
 		searchId: string,
@@ -188,55 +171,72 @@ export class SearchOrchestratorService {
 		if (products.length === 0) return;
 
 		try {
-			// Take products from buffer
 			const batch = products.splice(0, products.length);
 
-			// Step 1: Store full products in MongoDB
+			// STEP 1: Store full products in MongoDB
 			await this.crawlSessionService.addProducts(searchId, batch);
 
-			// Step 2: Get ranked IDs from AI
-			const rankedIds = await this.aiService.rankProductsByIds(query, batch);
+			// STEP 2: Get ranked IDs AND scores from AI
+			const { rankedIds, scores } = await this.aiService.rankProductsWithScores(
+				query,
+				batch,
+			);
 
-			// Step 3: Save ranked IDs to database (maintains order)
+			// STEP 3: Save ranked IDs to database
 			await this.crawlSessionService.appendRankedProductIds(
 				searchId,
 				rankedIds,
 			);
 
-			// Step 4: Reconstruct ranked products for streaming
+			// STEP 4: Save product scores to database ← NEW
+			await this.crawlSessionService.appendProductScores(searchId, scores);
+
+			// STEP 5: Reconstruct products in ranked order
 			const rankedProducts = rankedIds
 				.map((id) => batch.find((p) => p.id === id))
 				.filter((p): p is CrawledProduct => p !== undefined);
 
-			// Step 5: Emit ranked products to frontend
+			// STEP 6: Emit to frontend via SSE (with scores) ← UPDATED
 			subject.next({
 				event: "product",
 				data: {
 					products: rankedProducts,
+					scores, // ← NEW: Include scores in response
 					batchSize: rankedProducts.length,
 				},
 			});
 
 			console.log(
-				`✅ Ranked, stored, and emitted batch of ${rankedProducts.length} products`,
+				`✅ Ranked, stored, and emitted batch of ${rankedProducts.length} products with scores`,
 			);
 		} catch (error) {
 			console.error("Batch ranking/storage failed:", error);
 
-			// Fallback: store unranked
 			const batch = products.splice(0, products.length);
 			const unrankedIds = batch.map((p) => p.id);
+
+			// Fallback scores
+			const fallbackScores: ProductScore[] = batch.map((p, index) => ({
+				productId: p.id,
+				relevanceScore: Math.max(50, 100 - index * 2),
+				aiReasoning: "Fallback ranking (AI error)",
+			}));
 
 			await this.crawlSessionService.addProducts(searchId, batch);
 			await this.crawlSessionService.appendRankedProductIds(
 				searchId,
 				unrankedIds,
 			);
+			await this.crawlSessionService.appendProductScores(
+				searchId,
+				fallbackScores,
+			);
 
 			subject.next({
 				event: "product",
 				data: {
 					products: batch,
+					scores: fallbackScores,
 					batchSize: batch.length,
 					aiRankingFailed: true,
 				},

@@ -252,7 +252,7 @@ export class EbayCrawler implements IBaseCrawler {
 		return {
 			id: nanoid(),
 			title: raw.title,
-			price: this.parsePrice(raw.price)?.toLocaleString(),
+			price: this.parsePrice(raw.price),
 			currency: "USD",
 			imageUrl: raw.imageUrl !== "N/A" ? raw.imageUrl : undefined,
 			productUrl:

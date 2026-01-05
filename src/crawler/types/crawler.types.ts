@@ -3,7 +3,7 @@
 export interface CrawledProduct {
 	id: string; // ← NEW: Unique identifier
 	title: string;
-	price?: string;
+	price?: number;
 	currency?: string;
 	imageUrl?: string;
 	productUrl?: string;

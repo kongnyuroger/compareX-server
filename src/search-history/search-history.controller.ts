@@ -1,3 +1,5 @@
+// src/search-history/search-history.controller.ts
+
 import {
 	BadRequestException,
 	Controller,
@@ -10,9 +12,12 @@ import {
 } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
 import { Request } from "express";
+import { lastValueFrom } from "rxjs";
 import { AiService } from "src/ai/ai.services";
 import { MOCK_PRODUCTS } from "src/ai/constants/mock-products";
 import { CrawlerService } from "src/crawler/crawler.service";
+import { CrawledProduct } from "src/crawler/types/crawler.types";
+import { CrawlerEventType } from "src/crawler/types/crawler-events";
 import { SearchParamsDto } from "./dto/search-params.dto";
 import { SearchHistoryService } from "./search-history.service";
 
@@ -24,7 +29,7 @@ interface UserRequest extends Request {
 	};
 }
 
-@Controller("search")
+@Controller("searchHistory")
 export class SearchHistoryController {
 	constructor(
 		private readonly searchHistoryService: SearchHistoryService,
@@ -33,11 +38,9 @@ export class SearchHistoryController {
 	) {}
 
 	/**
-	 * MAIN SEARCH ENDPOINT
-	 * Stores 100% of product object data
-	 * Supports anonymous + logged-in users
+	 * MAIN SEARCH ENDPOINT (Legacy - Non-Streaming)
+	 * For backward compatibility
 	 */
-	@UseGuards(AuthGuard("jwt"))
 	@Get()
 	async search(
 		@Query("q") query: string,
@@ -48,56 +51,64 @@ export class SearchHistoryController {
 			throw new BadRequestException('Query parameter "q" is required');
 		}
 
-		// Properly extract userId from authenticated user
 		const userId = req.user?.userId || null;
 
-		// Crawl all platforms
-		const crawledProducts = await this.crawlerService.searchAllSites(query);
+		// Collect all products from streaming crawlers
+		const crawledProducts: CrawledProduct[] = [];
 
-		// Rank + filter via AI
-		const rankedResults = await this.aiService.rankAndLimitProducts(
+		const crawlerEvents$ = this.crawlerService.streamAllSites(query, 1);
+
+		// Convert Observable to Promise and collect all products
+		await new Promise<void>((resolve, reject) => {
+			crawlerEvents$.subscribe({
+				next: (event) => {
+					if (event.type === CrawlerEventType.PRODUCT) {
+						crawledProducts.push(event.product);
+					}
+				},
+				complete: () => resolve(),
+				error: (err) => reject(err),
+			});
+		});
+
+		// Rank products using ID-based ranking
+		const rankedIds = await this.aiService.rankProductsByIds(
 			query,
 			crawledProducts,
-			{
-				resultsPerPlatform: searchParams.resultsPerPlatform || 30,
-				globalLimit: searchParams.globalLimit || 90,
-				minRelevanceScore: searchParams.minScore || 0.5,
-				sortBy: searchParams.sortBy || "relevance",
-			},
 		);
 
-		// Build platform stats for MongoDB storage
-		const platformStats =
-			rankedResults.platformStats?.map((p: any) => ({
-				platform: p.platform,
-				total: p.total,
-				kept: p.kept,
-				discarded: p.discarded,
-			})) || [];
+		// Reconstruct products in ranked order
+		const rankedProducts = rankedIds
+			.map((id) => crawledProducts.find((p) => p.id === id))
+			.filter((p): p is CrawledProduct => p !== undefined);
 
-		// SAVE EVERYTHING – full product data with userId
+		// Build platform stats
+		const platformStats = crawledProducts.reduce(
+			(acc, product) => {
+				const platform = product.source;
+				if (!acc[platform]) {
+					acc[platform] = { platform, total: 0 };
+				}
+				acc[platform].total++;
+				return acc;
+			},
+			{} as Record<string, { platform: string; total: number }>,
+		);
+
+		// Save to database
 		const searchId = await this.searchHistoryService.saveSearch(
 			query,
 			userId,
-			{
-				resultsPerPlatform: searchParams.resultsPerPlatform || 30,
-				globalLimit: searchParams.globalLimit || 90,
-				minScore: searchParams.minScore || 0.5,
-				sortBy: searchParams.sortBy || "relevance",
-				balance: searchParams.balance || false,
-			},
-			{
-				totalFound: rankedResults.totalFound,
-				totalAfterFiltering: rankedResults.totalAfterFiltering,
-				platformStats,
-			},
-			rankedResults.rankedProducts,
-			rankedResults.otherProducts,
+			searchParams,
+			rankedProducts,
 		);
 
 		return {
 			searchId,
-			...rankedResults,
+			query,
+			totalProducts: rankedProducts.length,
+			platformStats: Object.values(platformStats),
+			rankedProducts,
 		};
 	}
 
@@ -111,7 +122,6 @@ export class SearchHistoryController {
 		@Query("limit") limit?: number,
 		@Query("skip") skip?: number,
 	) {
-		console.log(req.user);
 		const userId = req.user!.userId;
 
 		return this.searchHistoryService.getUserHistory(
@@ -123,11 +133,11 @@ export class SearchHistoryController {
 
 	/**
 	 * GET A SAVED SEARCH BY ID
-	 * Returns EXACT stored products
 	 */
 	@UseGuards(AuthGuard("jwt"))
 	@Get("history/:id")
 	async getSearchById(@Param("id") searchId: string, @Req() req: UserRequest) {
+		console.log("session user:", req.user);
 		const userId = req.user!.userId || null;
 
 		const search = await this.searchHistoryService.getSearchById(
@@ -152,6 +162,9 @@ export class SearchHistoryController {
 
 	@Get("trending")
 	async getTrending() {
-		return MOCK_PRODUCTS;
+		// Return mock data or implement trending logic
+		return {
+			trending: MOCK_PRODUCTS,
+		};
 	}
 }

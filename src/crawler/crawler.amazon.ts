@@ -1,67 +1,154 @@
-import puppeteer, { Browser } from "puppeteer-core";
-import { CrawledProduct } from "./types/crawler.types";
+// src/crawler/crawler.amazon.ts
 
-export class AmazonCrawler {
+import { nanoid } from "nanoid";
+import puppeteer, { Browser } from "puppeteer-core";
+import { Observable, Observer } from "rxjs";
+import { IBaseCrawler } from "./types/base-crawler.interface";
+import { CrawledProduct } from "./types/crawler.types";
+import { CrawlerEvent, CrawlerEventType } from "./types/crawler-events";
+
+interface ScrapedAmazonProduct {
+	title: string;
+	detailPageUrl: string;
+	imageUrl: string;
+	sponsored: string;
+	badge: string;
+	price: string;
+	basePrice: string;
+	rating: string;
+	ratingsCount: string;
+}
+
+export class AmazonCrawler implements IBaseCrawler {
 	private readonly SBR_WS_ENDPOINT = process.env.SBR_WS_ENDPOINT;
+	private readonly SOURCE = "Amazon";
 
 	constructor() {
 		if (!this.SBR_WS_ENDPOINT) {
-			throw new Error(
-				"SBR_WS_ENDPOINT environment variable is required for AmazonCrawler",
-			);
+			throw new Error("SBR_WS_ENDPOINT environment variable is required");
 		}
 	}
+
+	/**
+	 * Stream products as they are scraped
+	 */
+	streamSearch(query: string, maxPages: number = 2): Observable<CrawlerEvent> {
+		return new Observable((observer: Observer<CrawlerEvent>) => {
+			this.executeSearch(query, maxPages, observer).catch((error) => {
+				observer.next({
+					type: CrawlerEventType.CRAWLER_ERROR,
+					source: this.SOURCE,
+					error: error.message,
+					timestamp: Date.now(),
+				});
+				observer.complete();
+			});
+		});
+	}
+
+	private async executeSearch(
+		query: string,
+		maxPages: number,
+		observer: Observer<CrawlerEvent>,
+	): Promise<void> {
+		let totalProducts = 0;
+
+		try {
+			console.log(`${this.SOURCE}: Starting search for "${query}"`);
+
+			let currentUrl = await this.getSearchResultsUrl(query);
+
+			for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+				const { data, nextPageUrl } = await this.scrapePage(currentUrl);
+
+				// Emit each product immediately
+				for (const rawProduct of data) {
+					const product = this.transformProduct(rawProduct);
+
+					observer.next({
+						type: CrawlerEventType.PRODUCT,
+						source: this.SOURCE,
+						product,
+						timestamp: Date.now(),
+					});
+
+					totalProducts++;
+				}
+
+				// Emit page completion event
+				observer.next({
+					type: CrawlerEventType.PAGE_COMPLETE,
+					source: this.SOURCE,
+					pageNumber: pageNum,
+					productsFound: data.length,
+					timestamp: Date.now(),
+				});
+
+				if (!nextPageUrl) break;
+
+				currentUrl = nextPageUrl.startsWith("http")
+					? nextPageUrl
+					: `https://www.amazon.com${nextPageUrl}`;
+
+				await this.delay(1500);
+			}
+
+			// Emit completion event
+			observer.next({
+				type: CrawlerEventType.CRAWLER_COMPLETE,
+				source: this.SOURCE,
+				totalProducts,
+				timestamp: Date.now(),
+			});
+
+			observer.complete();
+		} catch (error) {
+			observer.error(error);
+		}
+	}
+
 	private delay(ms: number): Promise<void> {
 		return new Promise((resolve) => setTimeout(resolve, ms));
 	}
 
-	// Open a fresh browser for every page — REQUIRED for Bright Data
 	private async openBrowser(): Promise<Browser> {
 		return puppeteer.connect({ browserWSEndpoint: this.SBR_WS_ENDPOINT });
 	}
 
-	// Get search results URL by constructing it directly
 	private async getSearchResultsUrl(searchPhrase: string): Promise<string> {
 		const browser = await this.openBrowser();
 		const page = await browser.newPage();
 
 		try {
-			// Go directly to search results
-			const searchUrl = `https://www.amazon.com/s?k=${encodeURIComponent(
-				searchPhrase,
-			)}`;
+			const searchUrl = `https://www.amazon.com/s?k=${encodeURIComponent(searchPhrase)}`;
 
-			console.log("Going directly to search URL:", searchUrl);
 			await page.goto(searchUrl, {
 				waitUntil: "networkidle2",
 				timeout: 60000,
 			});
 
-			// Wait for results to load
 			await page.waitForSelector(".s-widget-container", { timeout: 60000 });
 
 			const url = page.url();
 			await browser.close();
 			return url;
 		} catch (error) {
-			console.error("Error in getSearchResultsUrl:", (error as Error).message);
-			await page.screenshot({ path: "error-screenshot.png" });
+			await page
+				.screenshot({ path: "amazon-error-screenshot.png" })
+				.catch(() => {});
 			await browser.close();
 			throw error;
 		}
 	}
 
-	// Scrape a single Amazon result page
 	private async scrapePage(
 		url: string,
-	): Promise<{ data: any[]; nextPageUrl: string | null }> {
+	): Promise<{ data: ScrapedAmazonProduct[]; nextPageUrl: string | null }> {
 		const browser = await this.openBrowser();
 		const page = await browser.newPage();
 
 		try {
-			console.log("Navigating:", url);
 			await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
-
 			await page.waitForSelector(".s-widget-container", { timeout: 60000 });
 
 			const data = await page.evaluate(() => {
@@ -82,7 +169,6 @@ export class AmazonCrawler {
 								?.getAttribute("href") ||
 							"N/A";
 
-						// Get product image link
 						const imageElement = card.querySelector(
 							"img.s-image",
 						) as HTMLImageElement;
@@ -91,29 +177,24 @@ export class AmazonCrawler {
 							imageElement?.getAttribute("data-src") ||
 							"N/A";
 
-						// Get price
 						const priceElement = card.querySelector(
 							".a-price .a-offscreen",
 						) as HTMLElement;
 						const price = priceElement?.innerText || "N/A";
 
-						// Get base price
 						const basePriceElement = card.querySelector(
 							"span.a-price.a-text-price > span.a-offscreen",
 						) as HTMLElement;
 						const basePrice = basePriceElement?.innerText || "N/A";
 
-						// Get badge
 						const badgeElement = card.querySelector(
 							".a-badge-label-inner",
 						) as HTMLElement;
 						const badge = badgeElement?.innerText || "N/A";
 
-						// Get rating
 						const ratingElement = card.querySelector("[aria-label]");
 						const rating = ratingElement?.getAttribute("aria-label") || "N/A";
 
-						// Get ratings count
 						const ratingsCountElement = card.querySelector(
 							".a-row > span:nth-child(2)[aria-label]",
 						);
@@ -134,10 +215,9 @@ export class AmazonCrawler {
 							ratingsCount,
 						};
 					})
-					.filter(Boolean);
+					.filter(Boolean) as ScrapedAmazonProduct[];
 			});
 
-			// Get next page URL
 			const nextPageUrl = await page.evaluate(() => {
 				const nextBtn = document.querySelector(".s-pagination-next");
 				return nextBtn && !nextBtn.getAttribute("aria-disabled")
@@ -148,110 +228,53 @@ export class AmazonCrawler {
 			await browser.close();
 			return { data, nextPageUrl };
 		} catch (error) {
-			console.error("Error in scrapePage:", (error as Error).message);
-			await page.screenshot({ path: `error-page-${Date.now()}.png` });
+			await page
+				.screenshot({ path: `amazon-error-page-${Date.now()}.png` })
+				.catch(() => {});
 			await browser.close();
 			throw error;
 		}
 	}
 
-	// Main search method - public interface
-	async search(query: string, maxPages: number = 2): Promise<CrawledProduct[]> {
-		try {
-			console.log("Amazon Search:", query);
-			console.log("Max pages:", maxPages);
-			console.log("------------------------------------");
-
-			// Get search results URL
-			let currentUrl = await this.getSearchResultsUrl(query);
-
-			const allData: any[] = [];
-
-			// Loop through pages
-			for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
-				console.log(`\nScraping Amazon Page ${pageNum}...`);
-
-				const { data, nextPageUrl } = await this.scrapePage(currentUrl);
-
-				allData.push(...data);
-
-				if (!nextPageUrl) {
-					console.log("No more pages. Stopping.");
-					break;
-				}
-
-				currentUrl = nextPageUrl.startsWith("http")
-					? nextPageUrl
-					: `https://www.amazon.com${nextPageUrl}`;
-
-				await this.delay(1500);
-			}
-
-			console.log(
-				`\nAmazon scraping finished. Found ${allData.length} products.\n`,
-			);
-
-			// Transform to CrawledProduct format
-			return this.transformResults(allData);
-		} catch (error) {
-			console.error("Error in Amazon search:", error);
-			return [];
-		}
-	}
-
-	// Transform Amazon results to match CrawledProduct interface
-	private transformResults(rawData: any[]): CrawledProduct[] {
-		return rawData.map((item) => ({
-			title: item.title,
-			price: this.parsePrice(item.price),
+	private transformProduct(raw: ScrapedAmazonProduct): CrawledProduct {
+		return {
+			id: nanoid(),
+			title: raw.title,
+			price: this.parsePrice(raw.price),
 			currency: "USD",
-			imageUrl: item.imageUrl !== "N/A" ? item.imageUrl : undefined,
+			imageUrl: raw.imageUrl !== "N/A" ? raw.imageUrl : undefined,
 			productUrl:
-				item.detailPageUrl !== "N/A"
-					? item.detailPageUrl.startsWith("http")
-						? item.detailPageUrl
-						: `https://www.amazon.com${item.detailPageUrl}`
+				raw.detailPageUrl !== "N/A"
+					? raw.detailPageUrl.startsWith("http")
+						? raw.detailPageUrl
+						: `https://www.amazon.com${raw.detailPageUrl}`
 					: undefined,
-			source: "Amazon",
-			rating: this.parseRating(item.rating),
-			reviewCount: this.parseReviewCount(item.ratingsCount),
-			isSponsored: item.sponsored === "yes",
-			badge: item.badge !== "N/A" ? item.badge : undefined,
+			source: this.SOURCE,
+			rating: this.parseRating(raw.rating),
+			reviewCount: this.parseReviewCount(raw.ratingsCount),
+			isSponsored: raw.sponsored === "yes",
+			badge: raw.badge !== "N/A" ? raw.badge : undefined,
 			basePrice:
-				item.basePrice !== "N/A" ? this.parsePrice(item.basePrice) : undefined,
-		}));
+				raw.basePrice !== "N/A" ? this.parsePrice(raw.basePrice) : undefined,
+		};
 	}
 
-	// Helper to parse price strings like "$299.99" to number
 	private parsePrice(priceString: string): number | undefined {
 		if (!priceString || priceString === "N/A") return undefined;
-
-		const match = priceString.match(/[\d,]+\.?\d*/);
-		if (match) {
-			return parseFloat(match[0].replace(/,/g, ""));
-		}
-		return undefined;
+		const cleaned = priceString.replace(/,/g, "");
+		const match = cleaned.match(/\d+(\.\d+)?/);
+		return match ? parseFloat(match[0]) : undefined;
 	}
 
-	// Helper to parse rating strings like "4.5 out of 5 stars" to number
 	private parseRating(ratingString: string): number | undefined {
 		if (!ratingString || ratingString === "N/A") return undefined;
-
 		const match = ratingString.match(/(\d+\.?\d*)\s+out\s+of/i);
-		if (match) {
-			return parseFloat(match[1]);
-		}
-		return undefined;
+		return match ? parseFloat(match[1]) : undefined;
 	}
 
-	// Helper to parse review count strings like "45,234" to number
 	private parseReviewCount(countString: string): number | undefined {
 		if (!countString || countString === "N/A") return undefined;
-
 		const match = countString.match(/[\d,]+/);
-		if (match) {
-			return parseInt(match[0].replace(/,/g, ""), 10);
-		}
-		return undefined;
+		return match ? parseInt(match[0].replace(/,/g, ""), 10) : undefined;
 	}
 }

@@ -1,8 +1,11 @@
+// src/crawler/crawler.service.ts
+
 import { Injectable } from "@nestjs/common";
+import { catchError, merge, Observable, of } from "rxjs";
 import { AmazonCrawler } from "./crawler.amazon";
 import { EbayCrawler } from "./crawler.ebay";
 import { WalmartCrawler } from "./crawler.walmart";
-import { CrawledProduct } from "./types/crawler.types";
+import { CrawlerEvent, CrawlerEventType } from "./types/crawler-events";
 
 @Injectable()
 export class CrawlerService {
@@ -10,55 +13,53 @@ export class CrawlerService {
 	private readonly walmart = new WalmartCrawler();
 	private readonly ebay = new EbayCrawler();
 
-	async searchAllSites(query: string): Promise<CrawledProduct[]> {
-		console.log(`\n🔍 Starting parallel search for: "${query}"\n`);
-
-		// Run searches in parallel with proper error handling
-		const results = await Promise.allSettled([
-			this.walmart.search(query, 1),
-			this.amazon.search(query, 1),
-			this.ebay.search(query, 1),
-			// this.alibaba.search(query, 1), // Uncomment when Alibaba zone is ready
-		]);
-
-		// Collect successful results
-		const allProducts: CrawledProduct[] = [];
-
-		results.forEach((result, index) => {
-			const siteName = ["Amazon", "Walmart", "eBay"][index];
-
-			if (result.status === "fulfilled") {
-				console.log(`✅${siteName}: Found ${result.value.length} products`);
-				allProducts.push(...result.value);
-			} else {
-				console.log(` ${siteName}: Failed - ${result.reason.message}`);
-			}
-		});
-
-		console.log(`\n🎉 Total products found: ${allProducts.length}\n`);
-
-		return allProducts;
-	}
-
-	// Search individual sites
-	async searchAmazon(
+	/**
+	 * Stream products from all crawlers in parallel
+	 * Errors from one crawler don't stop others
+	 */
+	streamAllSites(
 		query: string,
-		maxPages: number = 2,
-	): Promise<CrawledProduct[]> {
-		return this.amazon.search(query, maxPages);
-	}
+		maxPages: number = 1,
+	): Observable<CrawlerEvent> {
+		console.log(`\n🔍 Starting parallel streaming search for: "${query}"\n`);
 
-	async searchWalmart(
-		query: string,
-		maxPages: number = 2,
-	): Promise<CrawledProduct[]> {
-		return this.walmart.search(query, maxPages);
-	}
+		const amazonStream$ = this.amazon.streamSearch(query, maxPages).pipe(
+			catchError((error) => {
+				console.error(`Amazon stream error: ${error.message}`);
+				return of<CrawlerEvent>({
+					type: CrawlerEventType.CRAWLER_ERROR,
+					source: "Amazon",
+					error: error.message,
+					timestamp: Date.now(),
+				});
+			}),
+		);
 
-	async searchEbay(
-		query: string,
-		maxPages: number = 2,
-	): Promise<CrawledProduct[]> {
-		return this.ebay.search(query, maxPages);
+		const walmartStream$ = this.walmart.streamSearch(query, maxPages).pipe(
+			catchError((error) => {
+				console.error(`Walmart stream error: ${error.message}`);
+				return of<CrawlerEvent>({
+					type: CrawlerEventType.CRAWLER_ERROR,
+					source: "Walmart",
+					error: error.message,
+					timestamp: Date.now(),
+				});
+			}),
+		);
+
+		const ebayStream$ = this.ebay.streamSearch(query, maxPages).pipe(
+			catchError((error) => {
+				console.error(`eBay stream error: ${error.message}`);
+				return of<CrawlerEvent>({
+					type: CrawlerEventType.CRAWLER_ERROR,
+					source: "eBay",
+					error: error.message,
+					timestamp: Date.now(),
+				});
+			}),
+		);
+
+		// Merge all streams - products emitted as soon as any crawler finds them
+		return merge(amazonStream$, walmartStream$, ebayStream$);
 	}
 }

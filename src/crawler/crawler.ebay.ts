@@ -151,9 +151,7 @@ export class EbayCrawler implements IBaseCrawler {
 			await this.delay(7000);
 
 			const data = await page.evaluate(() => {
-				const cards = [
-					...document.querySelectorAll("li.s-item"),
-				] as HTMLElement[];
+				const cards = [...document.querySelectorAll("li")] as HTMLElement[];
 
 				return cards
 					.map((card) => {

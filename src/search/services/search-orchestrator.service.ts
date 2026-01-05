@@ -88,6 +88,9 @@ export class SearchOrchestratorService {
 						},
 					});
 				} else if (event.type === CrawlerEventType.CRAWLER_COMPLETE) {
+					if (!platformStats[event.source]) {
+						platformStats[event.source] = { total: 0, completed: false };
+					}
 					platformStats[event.source].completed = true;
 					completedCrawlers++;
 

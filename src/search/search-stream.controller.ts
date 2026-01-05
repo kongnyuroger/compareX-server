@@ -1,5 +1,3 @@
-// src/search/search-stream.controller.ts
-
 import {
 	BadRequestException,
 	Controller,
@@ -16,6 +14,7 @@ import {
 import { JwtService } from "@nestjs/jwt";
 import { AuthGuard } from "@nestjs/passport";
 import { map, Observable } from "rxjs";
+import { AiService } from "src/ai/ai.services";
 import { CrawlerService } from "src/crawler/crawler.service";
 import { CrawlSessionService } from "./services/crawl-session.service";
 import { SearchOrchestratorService } from "./services/search-orchestrator.service";
@@ -35,6 +34,7 @@ export class SearchStreamController {
 		private readonly orchestrator: SearchOrchestratorService,
 		private readonly crawlSessionService: CrawlSessionService,
 		private readonly jwtService: JwtService, // Inject JwtService
+		private readonly aiService: AiService,
 	) {}
 
 	/**
@@ -56,6 +56,9 @@ export class SearchStreamController {
 		if (!token) {
 			throw new UnauthorizedException("Authentication token required");
 		}
+		// Normalize query
+		query = await this.aiService.normalizeQuery(query);
+		console.log(`Normalized query: "${query}"`);
 
 		let userId: string | null = null;
 

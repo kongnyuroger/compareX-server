@@ -1,7 +1,5 @@
-// src/search/search.module.ts
-
 import { Module } from "@nestjs/common";
-import { JwtModule } from "@nestjs/jwt"; // ← Add this
+import { JwtModule } from "@nestjs/jwt";
 import { MongooseModule } from "@nestjs/mongoose";
 import { AiModule } from "src/ai/ai.module";
 import { CrawlerModule } from "src/crawler/crawler.module";

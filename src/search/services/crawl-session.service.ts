@@ -1,5 +1,3 @@
-// src/search/services/crawl-session.service.ts
-
 import { Injectable } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
@@ -188,7 +186,10 @@ export class CrawlSessionService {
 		if (!session) return [];
 
 		// Reconstruct products in ranked order
-		const products = session.products as Record<string, CrawledProduct>;
+		const products = session.products as unknown as Record<
+			string,
+			CrawledProduct
+		>;
 		const rankedProducts: CrawledProduct[] = [];
 
 		for (const productId of session.rankedProductIds) {

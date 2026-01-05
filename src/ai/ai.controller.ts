@@ -10,9 +10,11 @@ export class AiController {
 		if (!query || query.trim().length === 0) {
 			throw new BadRequestException("Query parameter 'q' is required");
 		}
-		//const terms =  await this.aiService.expandQuery(query);
 
-		return MOCK_PRODUCTS;
+		const normalizedQuery = this.aiService.normalizeQuery(query);
+		//const terms =  await this.aiService.expandQuery(normalizedQuery);
+
+		return normalizedQuery;
 	}
 
 	@Get("rank")

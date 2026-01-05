@@ -49,6 +49,54 @@ export class AiService {
 			apiKey: process.env.OPENAI_API_KEY,
 		});
 	}
+	/**
+	 * Normalize raw user input into a clean search term using AI
+	 * Removes filler words, fixes typos, simplifies the query
+	 */
+	async normalizeQuery(rawQuery: string): Promise<string> {
+		try {
+			const response = await this.client.chat.completions.create({
+				model: "gpt-4o-mini",
+				messages: [
+					{
+						role: "system",
+						content: `
+						You are an AI assistant that normalizes search queries.
+						- Correct spelling and grammar
+						- Remove filler words and irrelevant terms
+						- Simplify phrasing while keeping meaning
+						Return ONLY the cleaned query as a single line, no explanations.
+					`,
+					},
+					{
+						role: "user",
+						content: rawQuery,
+					},
+				],
+				temperature: 0.0,
+			});
+
+			const content = response.choices[0]?.message?.content?.trim();
+			if (!content) {
+				// fallback method if AI fails
+				return rawQuery
+					.toLowerCase()
+					.replace(/[^\w\s-]/g, " ")
+					.replace(/\s+/g, " ")
+					.trim();
+			}
+
+			return content;
+		} catch (error) {
+			console.error("AI query normalization failed:", error);
+			// fallback to original method if AI fails
+			return rawQuery
+				.toLowerCase()
+				.replace(/[^\w\s-]/g, " ")
+				.replace(/\s+/g, " ")
+				.trim();
+		}
+	}
 
 	/**
 	 * Rank products and return IDs with relevance scores

@@ -1,37 +1,3 @@
-//	async expandQuery(query: string): Promise<string[]> {
-//		try {
-//			const response = await this.client.chat.completions.create({
-//				model: "gpt-4o-mini", // Fixed: was "gpt-5"
-//				messages: [
-//					{
-//						role: "system",
-//						content:
-//							"Expand the product search query into 3–5 alternative variations. Return ONLY a list with no bullet points. No explanations.",
-//					},
-//					{ role: "user", content: query },
-//				],
-//			});
-//
-//			const choice = response.choices[0];
-//			if (!choice?.message?.content) {
-//				return [query];
-//			}
-//			const content = choice.message.content;
-//			return content
-//				.split("\n")
-//				.map((item) => item.replace(/^\d+\.\s*/, "").trim())
-//				.filter((item) => item.length > 0);
-//		} catch (error) {
-//			console.error("OpenAI Error:", error);
-//			throw new InternalServerErrorException("AI query expansion failed");
-//		}
-//	}
-
-// src/ai/ai.services.ts
-// src/ai/ai.services.ts
-
-// src/ai/ai.services.ts
-
 import { Injectable, InternalServerErrorException } from "@nestjs/common";
 import OpenAI from "openai";
 import {
@@ -214,6 +180,50 @@ export class AiService {
 	 * Legacy method for backward compatibility
 	 * Returns only IDs without scores
 	 */
+	async normalizeQuery(rawQuery: string): Promise<string> {
+		try {
+			const response = await this.client.chat.completions.create({
+				model: "gpt-4o-mini",
+				messages: [
+					{
+						role: "system",
+						content: `
+						You are an AI assistant that normalizes search queries.
+						- Correct spelling and grammar
+						- Remove filler words and irrelevant terms
+						- Simplify phrasing while keeping meaning
+						Return ONLY the cleaned query as a single line, no explanations.
+					`,
+					},
+					{
+						role: "user",
+						content: rawQuery,
+					},
+				],
+				temperature: 0.0,
+			});
+
+			const content = response.choices[0]?.message?.content?.trim();
+			if (!content) {
+				// fallback method if AI fails
+				return rawQuery
+					.toLowerCase()
+					.replace(/[^\w\s-]/g, " ")
+					.replace(/\s+/g, " ")
+					.trim();
+			}
+
+			return content;
+		} catch (error) {
+			console.error("AI query normalization failed:", error);
+			// fallback to original method if AI fails
+			return rawQuery
+				.toLowerCase()
+				.replace(/[^\w\s-]/g, " ")
+				.replace(/\s+/g, " ")
+				.trim();
+		}
+	}
 	async rankProductsByIds(
 		query: string,
 		products: CrawledProduct[],

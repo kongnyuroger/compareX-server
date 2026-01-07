@@ -29,6 +29,12 @@ interface UserRequest extends Request {
 	};
 }
 
+/**
+ * @openapi
+ * tags:
+ *   - name: Search
+ *     description: Real-time product search and streaming endpoints
+ */
 @Controller("search")
 export class SearchStreamController {
 	constructor(
@@ -40,10 +46,39 @@ export class SearchStreamController {
 	) {}
 
 	/**
-	 * SSE endpoint for streaming search results
-	 * Accepts token as query parameter for EventSource compatibility
+	 * @openapi
+	 * /search/stream:
+	 *   get:
+	 *     tags:
+	 *       - Search
+	 *     summary: Stream real-time product search results
+	 *     description: |
+	 *       Streams ranked product results in real time using *Server-Sent Events (SSE)*.
+	 *       Authentication is done via JWT token passed as a *query parameter*
+	 *       because EventSource does not support headers.
 	 *
-	 * Usage: GET /search/stream?q=iphone&token=JWT_TOKEN
+	 *     parameters:
+	 *       - in: query
+	 *         name: q
+	 *         required: true
+	 *         schema:
+	 *           type: string
+	 *         description: Search query (e.g. "iphone 14")
+	 *
+	 *       - in: query
+	 *         name: token
+	 *         required: true
+	 *         schema:
+	 *           type: string
+	 *         description: JWT authentication token
+	 *
+	 *     responses:
+	 *       200:
+	 *         description: Real-time SSE stream started
+	 *       400:
+	 *         description: Missing or invalid query parameter
+	 *       401:
+	 *         description: Invalid or expired JWT token
 	 */
 	@Sse("stream")
 	async streamSearch(
@@ -113,8 +148,30 @@ export class SearchStreamController {
 	}
 
 	/**
-	 * Get historical search results by searchId
-	 * Standard REST endpoint with JWT guard
+	 * @openapi
+	 * /search/results/{searchId}:
+	 *   get:
+	 *     tags:
+	 *       - Search History
+	 *     summary: Get search results by search ID
+	 *     security:
+	 *       - bearerAuth: []
+	 *
+	 *     parameters:
+	 *       - in: path
+	 *         name: searchId
+	 *         required: true
+	 *         schema:
+	 *           type: string
+	 *         description: Unique search session ID
+	 *
+	 *     responses:
+	 *       200:
+	 *         description: Search results retrieved successfully
+	 *       401:
+	 *         description: Unauthorized
+	 *       404:
+	 *         description: Search session not found
 	 */
 	@UseGuards(AuthGuard("jwt"))
 	@Get("results/:searchId")
@@ -155,7 +212,33 @@ export class SearchStreamController {
 	}
 
 	/**
-	 * Get user's search history
+	 * @openapi
+	 * /search/history:
+	 *   get:
+	 *     tags:
+	 *       - Search History
+	 *     summary: Get authenticated user's search history
+	 *     security:
+	 *       - bearerAuth: []
+	 *
+	 *     parameters:
+	 *       - in: query
+	 *         name: limit
+	 *         schema:
+	 *           type: integer
+	 *         description: Number of records to return (default: 50)
+	 *
+	 *       - in: query
+	 *         name: skip
+	 *         schema:
+	 *           type: integer
+	 *         description: Number of records to skip
+	 *
+	 *     responses:
+	 *       200:
+	 *         description: User search history retrieved successfully
+	 *       400:
+	 *         description: Authentication required
 	 */
 	@UseGuards(AuthGuard("jwt"))
 	@Get("history")

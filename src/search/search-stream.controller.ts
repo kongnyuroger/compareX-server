@@ -15,8 +15,9 @@ import {
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { AuthGuard } from "@nestjs/passport";
-import { map, Observable } from "rxjs";
+import { map, Observable, Subject } from "rxjs";
 import { AiService } from "src/ai/ai.services";
+import { MOCK_PRODUCTS } from "src/ai/constants/mock-products";
 import { CrawlerService } from "src/crawler/crawler.service";
 import { CrawlSessionService } from "./services/crawl-session.service";
 import { SearchOrchestratorService } from "./services/search-orchestrator.service";
@@ -88,11 +89,15 @@ export class SearchStreamController {
 		// Start crawling
 		const crawlerEvents$ = this.crawlerService.streamAllSites(query, 1);
 
+		// Create cancellation signal
+		const cancellationSubject = new Subject<void>();
+
 		// Orchestrate and rank
 		const searchMessages$ = this.orchestrator.orchestrateSearch(
 			searchId,
 			query,
 			crawlerEvents$,
+			cancellationSubject.asObservable(),
 		);
 
 		// Transform to SSE MessageEvent format
@@ -179,6 +184,14 @@ export class SearchStreamController {
 		return {
 			sessions,
 			total: sessions.length,
+		};
+	}
+
+	@Get("trending")
+	async getTrending() {
+		// Return mock data or implement trending logic
+		return {
+			trending: MOCK_PRODUCTS,
 		};
 	}
 }

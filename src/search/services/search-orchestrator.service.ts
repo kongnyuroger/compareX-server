@@ -2,7 +2,19 @@
 
 import { Injectable } from "@nestjs/common";
 import { nanoid } from "nanoid";
-import { Observable, Subject } from "rxjs";
+import {
+	bufferTime,
+	catchError,
+	filter,
+	finalize,
+	map,
+	merge,
+	Observable,
+	Subject,
+	scan,
+	takeUntil,
+	tap,
+} from "rxjs";
 import { AiService } from "src/ai/ai.services";
 import { CrawledProduct } from "src/crawler/types/crawler.types";
 import {
@@ -21,168 +33,279 @@ interface PlatformStats {
 	};
 }
 
+interface AccumulatedState {
+	platformStats: PlatformStats;
+	completedCrawlers: number;
+	seenProductIds: Set<string>;
+	startTime: number;
+}
+
+/**
+ * Search Orchestrator Service
+ *
+ * Uses RxJS operators to:
+ * - Merge multiple crawler streams
+ * - Buffer products for batch ranking
+ * - Handle errors gracefully per-crawler
+ * - Support cancellation via takeUntil
+ * - Manage state accumulation
+ *
+ * PURE RxJS - NO manual async loops or polling
+ */
 @Injectable()
 export class SearchOrchestratorService {
+	private readonly BATCH_SIZE = 10;
+	private readonly BUFFER_TIME_MS = 2000; // 2 seconds max wait
+	private readonly TOTAL_CRAWLERS = 3;
+
 	constructor(
 		private readonly aiService: AiService,
 		private readonly crawlSessionService: CrawlSessionService,
 	) {}
 
+	/**
+	 * Orchestrate search using pure RxJS operators
+	 *
+	 * Flow:
+	 * 1. Take crawler events stream
+	 * 2. Use scan() to accumulate state
+	 * 3. Use bufferTime() to batch products
+	 * 4. Use map() to rank batches
+	 * 5. Use merge() to combine all event types
+	 * 6. Use takeUntil() for cancellation
+	 * 7. Emit SearchStreamMessages for Socket.IO
+	 */
 	orchestrateSearch(
 		searchId: string,
 		query: string,
 		crawlerEvents$: Observable<CrawlerEvent>,
+		cancellation$: Observable<void>,
 	): Observable<SearchStreamMessage> {
-		const messageSubject = new Subject<SearchStreamMessage>();
-
-		const platformStats: PlatformStats = {};
-		const productBuffer: CrawledProduct[] = [];
-		const seenProductIds = new Set<string>();
-		let completedCrawlers = 0;
-		const totalCrawlers = 3;
 		const startTime = Date.now();
 
-		crawlerEvents$.subscribe({
-			next: async (event) => {
-				if (event.type === CrawlerEventType.PRODUCT) {
-					const productEvent = event as ProductEvent;
+		// Create subjects for different event streams
+		const productSubject = new Subject<CrawledProduct>();
+		const statsSubject = new Subject<SearchStreamMessage>();
+		const completeSubject = new Subject<SearchStreamMessage>();
 
-					if (!productEvent.product.id) {
-						productEvent.product.id = nanoid(16);
-					}
+		// Accumulate state using scan operator
+		const stateAccumulator$ = crawlerEvents$.pipe(
+			takeUntil(cancellation$),
+			scan<CrawlerEvent, AccumulatedState>(
+				(state, event) => {
+					// Update state based on event type
+					if (event.type === CrawlerEventType.PRODUCT) {
+						const productEvent = event as ProductEvent;
+						const product = productEvent.product;
 
-					if (seenProductIds.has(productEvent.product.id)) {
-						return;
-					}
-					seenProductIds.add(productEvent.product.id);
+						// Ensure product has ID
+						if (!product.id) {
+							product.id = nanoid(16);
+						}
 
-					productBuffer.push(productEvent.product);
+						// Track unique products
+						if (!state.seenProductIds.has(product.id)) {
+							state.seenProductIds.add(product.id);
 
-					if (!platformStats[productEvent.source]) {
-						platformStats[productEvent.source] = { total: 0, completed: false };
-					}
-					platformStats[productEvent.source].total++;
+							// Emit product to buffer stream
+							productSubject.next(product);
 
-					await this.crawlSessionService.updatePlatformStats(
-						searchId,
-						productEvent.source,
-						platformStats[productEvent.source].total,
-					);
-
-					if (productBuffer.length >= 10) {
-						await this.rankAndStoreBatch(
-							searchId,
-							query,
-							productBuffer,
-							messageSubject,
-						);
-					}
-				} else if (event.type === CrawlerEventType.PAGE_COMPLETE) {
-					messageSubject.next({
-						event: "stats",
-						data: {
-							source: event.source,
-							pageComplete: event.pageNumber,
-							productsFound: event.productsFound,
-							platformStats,
-						},
-					});
-				} else if (event.type === CrawlerEventType.CRAWLER_COMPLETE) {
-					if (!platformStats[event.source]) {
-						platformStats[event.source] = { total: 0, completed: false };
-					}
-					platformStats[event.source].completed = true;
-					completedCrawlers++;
-
-					if (productBuffer.length > 0) {
-						await this.rankAndStoreBatch(
-							searchId,
-							query,
-							productBuffer,
-							messageSubject,
-						);
-					}
-
-					if (completedCrawlers === totalCrawlers) {
-						const totalProducts = Object.values(platformStats).reduce(
-							(sum, stat) => sum + stat.total,
-							0,
-						);
-
-						await this.crawlSessionService.completeSession(searchId, {
-							totalProducts,
-							crawlDurationMs: Date.now() - startTime,
-						});
-
-						messageSubject.next({
-							event: "complete",
+							// Update platform stats
+							if (!state.platformStats[event.source]) {
+								state.platformStats[event.source] = {
+									total: 0,
+									completed: false,
+								};
+							}
+							state.platformStats[event.source].total++;
+						}
+					} else if (event.type === CrawlerEventType.PAGE_COMPLETE) {
+						// Emit stats event
+						statsSubject.next({
+							event: "stats",
 							data: {
-								searchId,
-								totalProducts,
-								platformStats,
-								durationMs: Date.now() - startTime,
+								source: event.source,
+								pageComplete: event.pageNumber,
+								productsFound: event.productsFound,
+								platformStats: state.platformStats,
+							},
+						});
+					} else if (event.type === CrawlerEventType.CRAWLER_COMPLETE) {
+						// Mark crawler as completed
+						if (!state.platformStats[event.source]) {
+							state.platformStats[event.source] = {
+								total: 0,
+								completed: false,
+							};
+						}
+						state.platformStats[event.source].completed = true;
+						state.completedCrawlers++;
+
+						// Check if all crawlers completed
+						if (state.completedCrawlers === this.TOTAL_CRAWLERS) {
+							const totalProducts = Object.values(state.platformStats).reduce(
+								(sum, stat) => sum + stat.total,
+								0,
+							);
+
+							// Update session in DB
+							this.crawlSessionService
+								.completeSession(searchId, {
+									totalProducts,
+									crawlDurationMs: Date.now() - startTime,
+								})
+								.catch((err) =>
+									console.error("Failed to complete session:", err),
+								);
+
+							// Emit completion event
+							completeSubject.next({
+								event: "complete",
+								data: {
+									searchId,
+									totalProducts,
+									platformStats: state.platformStats,
+									durationMs: Date.now() - startTime,
+								},
+							});
+
+							// Complete all subjects
+							productSubject.complete();
+							statsSubject.complete();
+							completeSubject.complete();
+						}
+					} else if (event.type === CrawlerEventType.CRAWLER_ERROR) {
+						// Emit error but don't fail entire stream
+						statsSubject.next({
+							event: "error",
+							data: {
+								source: event.source,
+								error: event.error,
 							},
 						});
 
-						messageSubject.complete();
-					}
-				} else if (event.type === CrawlerEventType.CRAWLER_ERROR) {
-					messageSubject.next({
-						event: "error",
-						data: {
-							source: event.source,
-							error: event.error,
-						},
-					});
+						// Count as completed (failed)
+						state.completedCrawlers++;
 
-					completedCrawlers++;
-
-					if (completedCrawlers === totalCrawlers) {
-						await this.crawlSessionService.completeSession(searchId, {
-							totalProducts: Object.values(platformStats).reduce(
+						if (state.completedCrawlers === this.TOTAL_CRAWLERS) {
+							const totalProducts = Object.values(state.platformStats).reduce(
 								(sum, stat) => sum + stat.total,
 								0,
-							),
-							crawlDurationMs: Date.now() - startTime,
-							failedCrawlers: Object.entries(platformStats)
-								.filter(([_, stat]) => !stat.completed)
-								.map(([name, _]) => name),
-						});
+							);
 
-						messageSubject.complete();
+							this.crawlSessionService
+								.completeSession(searchId, {
+									totalProducts,
+									crawlDurationMs: Date.now() - startTime,
+									failedCrawlers: Object.entries(state.platformStats)
+										.filter(([_, stat]) => !stat.completed)
+										.map(([name]) => name),
+								})
+								.catch((err) =>
+									console.error("Failed to complete session:", err),
+								);
+
+							completeSubject.next({
+								event: "complete",
+								data: {
+									searchId,
+									totalProducts,
+									platformStats: state.platformStats,
+									durationMs: Date.now() - startTime,
+								},
+							});
+
+							productSubject.complete();
+							statsSubject.complete();
+							completeSubject.complete();
+						}
 					}
-				}
-			},
-			error: async (error) => {
-				await this.crawlSessionService.failSession(searchId, error.message);
-				messageSubject.error(error);
-			},
+
+					return state;
+				},
+				{
+					platformStats: {},
+					completedCrawlers: 0,
+					seenProductIds: new Set<string>(),
+					startTime,
+				},
+			),
+			catchError((error) => {
+				console.error("State accumulator error:", error);
+				this.crawlSessionService
+					.failSession(searchId, error.message)
+					.catch((err) => console.error("Failed to fail session:", err));
+				throw error;
+			}),
+		);
+
+		// Buffer products for batch ranking
+		const rankedProducts$ = productSubject.pipe(
+			takeUntil(cancellation$),
+			bufferTime(this.BUFFER_TIME_MS, null, this.BATCH_SIZE),
+			filter((batch) => batch.length > 0),
+			// Rank each batch using AI
+			map(async (batch) => {
+				return this.rankAndStoreBatch(searchId, query, batch);
+			}),
+			// Convert Promise to Observable
+			map((promise) => promise),
+			// Flatten the async operations
+			mergeMap((promise) => promise),
+			filter((message): message is SearchStreamMessage => message !== null),
+			catchError((error) => {
+				console.error("Batch ranking error:", error);
+				// Return empty to continue stream
+				return [];
+			}),
+		);
+
+		// Subscribe to state accumulator to drive the process
+		// This is necessary to trigger the scan operator
+		stateAccumulator$.subscribe({
+			error: (err) => console.error("State stream error:", err),
+			complete: () => console.log("State stream completed"),
 		});
 
-		return messageSubject.asObservable();
+		// Merge all output streams
+		return merge(
+			rankedProducts$,
+			statsSubject.asObservable(),
+			completeSubject.asObservable(),
+		).pipe(
+			takeUntil(cancellation$),
+			finalize(() => {
+				console.log(`🏁 Search orchestration finalized for ${searchId}`);
+				productSubject.complete();
+				statsSubject.complete();
+				completeSubject.complete();
+			}),
+		);
 	}
 
 	/**
-	 * Rank a batch of products, store in DB with scores, and emit
+	 * Rank a batch of products using AI and store in DB
+	 * Returns SearchStreamMessage for emission
 	 */
 	private async rankAndStoreBatch(
 		searchId: string,
 		query: string,
 		products: CrawledProduct[],
-		subject: Subject<SearchStreamMessage>,
-	): Promise<void> {
-		if (products.length === 0) return;
+	): Promise<SearchStreamMessage | null> {
+		if (products.length === 0) {
+			return null;
+		}
 
 		try {
-			const batch = products.splice(0, products.length);
+			console.log(`🎯 Ranking batch of ${products.length} products...`);
 
 			// STEP 1: Store full products in MongoDB
-			await this.crawlSessionService.addProducts(searchId, batch);
+			await this.crawlSessionService.addProducts(searchId, products);
 
 			// STEP 2: Get ranked IDs AND scores from AI
 			const { rankedIds, scores } = await this.aiService.rankProductsWithScores(
 				query,
-				batch,
+				products,
 			);
 
 			// STEP 3: Save ranked IDs to database
@@ -191,41 +314,39 @@ export class SearchOrchestratorService {
 				rankedIds,
 			);
 
-			// STEP 4: Save product scores to database ← NEW
+			// STEP 4: Save product scores to database
 			await this.crawlSessionService.appendProductScores(searchId, scores);
 
 			// STEP 5: Reconstruct products in ranked order
 			const rankedProducts = rankedIds
-				.map((id) => batch.find((p) => p.id === id))
+				.map((id) => products.find((p) => p.id === id))
 				.filter((p): p is CrawledProduct => p !== undefined);
 
-			// STEP 6: Emit to frontend via SSE (with scores) ← UPDATED
-			subject.next({
+			console.log(
+				`✅ Ranked, stored, and prepared batch of ${rankedProducts.length} products`,
+			);
+
+			// STEP 6: Return message for emission
+			return {
 				event: "product",
 				data: {
 					products: rankedProducts,
-					scores, // ← NEW: Include scores in response
+					scores,
 					batchSize: rankedProducts.length,
 				},
-			});
-
-			console.log(
-				`✅ Ranked, stored, and emitted batch of ${rankedProducts.length} products with scores`,
-			);
+			};
 		} catch (error) {
 			console.error("Batch ranking/storage failed:", error);
 
-			const batch = products.splice(0, products.length);
-			const unrankedIds = batch.map((p) => p.id);
-
-			// Fallback scores
-			const fallbackScores: ProductScore[] = batch.map((p, index) => ({
+			// Fallback: store unranked with default scores
+			const unrankedIds = products.map((p) => p.id);
+			const fallbackScores: ProductScore[] = products.map((p, index) => ({
 				productId: p.id,
 				relevanceScore: Math.max(50, 100 - index * 2),
 				aiReasoning: "Fallback ranking (AI error)",
 			}));
 
-			await this.crawlSessionService.addProducts(searchId, batch);
+			await this.crawlSessionService.addProducts(searchId, products);
 			await this.crawlSessionService.appendRankedProductIds(
 				searchId,
 				unrankedIds,
@@ -235,15 +356,18 @@ export class SearchOrchestratorService {
 				fallbackScores,
 			);
 
-			subject.next({
+			return {
 				event: "product",
 				data: {
-					products: batch,
+					products,
 					scores: fallbackScores,
-					batchSize: batch.length,
+					batchSize: products.length,
 					aiRankingFailed: true,
 				},
-			});
+			};
 		}
 	}
 }
+
+// Helper for mergeMap (if not imported)
+import { mergeMap } from "rxjs/operators";

@@ -21,6 +21,7 @@ interface ScrapedWalmartProduct {
 export class WalmartCrawler implements IBaseCrawler {
 	private readonly SBR_WS_ENDPOINT = process.env.SBR_WS_ENDPOINT;
 	private readonly SOURCE = "Walmart";
+	private browser: Browser | null = null;
 
 	constructor() {
 		if (!this.SBR_WS_ENDPOINT) {
@@ -111,7 +112,14 @@ export class WalmartCrawler implements IBaseCrawler {
 	}
 
 	private async openBrowser(): Promise<Browser> {
-		return puppeteer.connect({ browserWSEndpoint: this.SBR_WS_ENDPOINT });
+		if (this.browser) return this.browser;
+
+		this.browser = await puppeteer.connect({
+			browserWSEndpoint: this.SBR_WS_ENDPOINT,
+			defaultViewport: { width: 1920, height: 1080 },
+		});
+
+		return this.browser;
 	}
 
 	private async getSearchResultsUrl(searchPhrase: string): Promise<string> {

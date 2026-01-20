@@ -1,98 +1,210 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+compareX Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+The compareX Backend powers the real-time product comparison experience by orchestrating crawling, stream processing, and live data delivery.
+It is built with NestJS, designed for scalability, maintainability, and real-time performance.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+ Overview
 
-## Description
+The backend is responsible for:
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Managing product searches and crawling workflows
 
-## Project setup
+Aggregating data from multiple e-commerce sources
 
-```bash
-$ npm install
-```
+Streaming results to clients in real time
 
-## Compile and run the project
+Handling cancellation, errors, and lifecycle events
 
-```bash
-# development
-$ npm run start
+Providing a clean, modular, and extensible architecture
 
-# watch mode
-$ npm run start:dev
+The system is built around RxJS for stream control and Socket.IO for real-time communication, enabling progressive delivery of results instead of delayed, batch responses.
 
-# production mode
-$ npm run start:prod
-```
+Core Capabilities
 
-## Run tests
+Real-time product streaming
 
-```bash
-# unit tests
-$ npm run test
+Parallel multi-source crawling
 
-# e2e tests
-$ npm run test:e2e
+Cancelable long-running searches
 
-# test coverage
-$ npm run test:cov
-```
+Backpressure & rate control
 
-## Deployment
+Clean separation of concerns
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Scalable, modular NestJS architecture
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+🛠 Tech Stack
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
+Framework: NestJS
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Language: TypeScript
 
-## Resources
+Real-time Transport: Socket.IO
 
-Check out a few resources that may come in handy when working with NestJS:
+Stream Management: RxJS
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+HTTP Server: Express (via NestJS)
 
-## Support
+Validation: class-validator / class-transformer
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Configuration: @nestjs/config
 
-## Stay in touch
+📁 Project Structure
+src/
+├── app.module.ts
+├── main.ts
+│
+├── modules/
+│   ├── search/               # Search orchestration
+│   ├── crawler/              # Crawling logic (per source)
+│   ├── stream/               # RxJS stream services
+│   └── socket/               # Socket.IO gateway
+│
+├── common/
+│   ├── filters/              # Global exception filters
+│   ├── pipes/                # Validation & transformation
+│   └── decorators/
+│
+├── config/
+│   └── configuration.ts
+│
+└── types/
+    └── product.types.ts
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+🔄 Real-Time Architecture
 
-## License
+compareX uses a two-layer streaming model:
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Crawler → RxJS Observable → Stream Processing → Socket.IO → Client
+
+Responsibilities
+
+RxJS
+
+Controls data flow
+
+Merges multiple crawlers
+
+Handles cancellation and cleanup
+
+Buffers or throttles emissions
+
+Socket.IO
+
+Pushes updates to connected clients
+
+Handles reconnects
+
+Emits lifecycle events (started, completed, cancelled, error)
+
+This approach ensures efficient resource usage and instant feedback to users.
+
+⚙️ Getting Started
+1️⃣ Prerequisites
+
+Node.js (v18 or higher)
+
+npm or yarn
+
+2️⃣ Installation
+git clone https://github.com/your-org/comparex-backend.git
+cd comparex-backend
+npm install
+
+3️⃣ Environment Variables
+
+Create a .env file:
+
+PORT=3000
+CLIENT_ORIGIN=http://localhost:3001
+NODE_ENV=development
+
+4️⃣ Run the Application
+npm run start:dev
+
+
+Server will start on:
+
+http://localhost:3000
+
+🔌 Socket.IO Events
+Client → Server
+
+start-search — start a new product search
+
+cancel-search — cancel an ongoing search
+
+Server → Client
+
+product — streamed product result
+
+search-started — search initialized
+
+search-complete — search finished
+
+search-cancelled — search stopped
+
+search-error — error occurred
+
+🧪 Scripts
+npm run start        # Start production server
+npm run start:dev    # Start development server
+npm run build        # Build application
+npm run lint         # Run linting
+
+🧩 Design Principles
+
+Real-time first: Data is streamed, not batched
+
+Observable-driven: Long-running tasks are cancellable
+
+Transport-agnostic logic: Business logic is not tied to Socket.IO
+
+Modular NestJS structure: Easy to extend and test
+
+Fail-safe cleanup: Streams terminate on disconnects or errors
+
+🔐 Security & Stability
+
+No client-side crawling logic
+
+Input validation on all incoming events
+
+Automatic cleanup on client disconnect
+
+Stream isolation to prevent cascading failures
+
+ Future Improvements
+
+Redis adapter for Socket.IO scaling
+
+Queue-based crawling (BullMQ)
+
+Authentication & rate limiting
+
+Persistent search history
+
+Monitoring & metrics
+
+Contributing
+
+Contributions are welcome.
+Please ensure:
+
+Code follows NestJS best practices
+
+RxJS streams are properly cleaned up
+
+Socket events are documented
+
+📄 License
+
+This project is proprietary and part of the compareX platform.
+All rights reserved.
+
+📬 Contact
+
+For questions, feedback, or collaboration, please contact the compareX engineering team.
+
+compareX Backend
+Building real-time product comparison at scale.

@@ -2,6 +2,7 @@
 
 import { Injectable } from "@nestjs/common";
 import { catchError, merge, Observable, of, shareReplay } from "rxjs";
+import { AliExpressCrawler } from "./crawler.aliexpress";
 import { AmazonCrawler } from "./crawler.amazon";
 import { EbayCrawler } from "./crawler.ebay";
 import { WalmartCrawler } from "./crawler.walmart";
@@ -23,6 +24,7 @@ export class CrawlerService {
 	private readonly amazon = new AmazonCrawler();
 	private readonly walmart = new WalmartCrawler();
 	private readonly ebay = new EbayCrawler();
+	private readonly aliexpress = new AliExpressCrawler();
 
 	/**
 	 * Stream products from all crawlers in parallel
@@ -56,11 +58,19 @@ export class CrawlerService {
 			"eBay",
 		);
 
+		const aliexpressStream$ = this.createIsolatedStream(
+			() => this.aliexpress.streamSearch(query, maxPages),
+			"AliExpress",
+		);
+
 		// Merge all streams - products emitted as soon as any crawler finds them
 		// shareReplay(1) ensures multiple subscribers get the same events
-		return merge(amazonStream$, walmartStream$, ebayStream$).pipe(
-			shareReplay({ bufferSize: 100, refCount: true }),
-		);
+		return merge(
+			amazonStream$,
+			walmartStream$,
+			ebayStream$,
+			aliexpressStream$,
+		).pipe(shareReplay({ bufferSize: 100, refCount: true }));
 	}
 
 	/**
@@ -94,13 +104,17 @@ export class CrawlerService {
 	 * Stream from a single crawler (optional utility method)
 	 */
 	streamSingleSite(
-		source: "Amazon" | "Walmart" | "eBay",
+		source: "Amazon" | "Walmart" | "eBay" | "AliExpress",
 		query: string,
 		maxPages: number = 1,
 	): Observable<CrawlerEvent> {
 		console.log(`🔍 Starting search on ${source} for: "${query}"`);
 
-		let crawler: AmazonCrawler | WalmartCrawler | EbayCrawler;
+		let crawler:
+			| AmazonCrawler
+			| WalmartCrawler
+			| EbayCrawler
+			| AliExpressCrawler;
 
 		switch (source) {
 			case "Amazon":
@@ -111,6 +125,9 @@ export class CrawlerService {
 				break;
 			case "eBay":
 				crawler = this.ebay;
+				break;
+			case "AliExpress":
+				crawler = this.aliexpress;
 				break;
 			default:
 				throw new Error(`Unknown crawler source: ${source}`);

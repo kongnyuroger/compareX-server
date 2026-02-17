@@ -1,4 +1,4 @@
-// src/crawler/crawler.walmart.ts
+// src/crawler/crawler.aliexpress.ts
 
 import { nanoid } from "nanoid";
 import puppeteer, { Browser } from "puppeteer-core";
@@ -7,20 +7,22 @@ import { IBaseCrawler } from "./types/base-crawler.interface";
 import { CrawledProduct } from "./types/crawler.types";
 import { CrawlerEvent, CrawlerEventType } from "./types/crawler-events";
 
-interface ScrapedWalmartProduct {
+interface ScrapedAliExpressProduct {
 	title: string;
 	detailPageUrl: string;
 	imageUrl: string;
 	price: string;
 	rating: string;
 	reviewCount: string;
-	isSponsored: string;
+	supplier: string;
+	moq: string;
+	hasTradeAssurance: string;
 	hasFreeShipping: string;
 }
 
-export class WalmartCrawler implements IBaseCrawler {
+export class AliExpressCrawler implements IBaseCrawler {
 	private readonly SBR_WS_ENDPOINT = process.env.SBR_WS_ENDPOINT;
-	private readonly SOURCE = "Walmart";
+	private readonly SOURCE = "AliExpress";
 
 	constructor() {
 		if (!this.SBR_WS_ENDPOINT) {
@@ -87,7 +89,7 @@ export class WalmartCrawler implements IBaseCrawler {
 
 				currentUrl = nextPageUrl.startsWith("http")
 					? nextPageUrl
-					: `https://www.walmart.com${nextPageUrl}`;
+					: `https://www.aliexpress.com${nextPageUrl}`;
 
 				await this.delay(2000);
 			}
@@ -111,9 +113,7 @@ export class WalmartCrawler implements IBaseCrawler {
 	}
 
 	private async openBrowser(): Promise<Browser> {
-		return puppeteer.connect({
-			browserWSEndpoint: this.SBR_WS_ENDPOINT,
-		});
+		return puppeteer.connect({ browserWSEndpoint: this.SBR_WS_ENDPOINT });
 	}
 
 	private async getSearchResultsUrl(searchPhrase: string): Promise<string> {
@@ -124,23 +124,22 @@ export class WalmartCrawler implements IBaseCrawler {
 			await page.setUserAgent(
 				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 			);
-			await page.setViewport({ width: 1920, height: 1080 });
 
-			const searchUrl = `https://www.walmart.com/search?q=${encodeURIComponent(searchPhrase)}`;
+			const searchUrl = `https://www.aliexpress.com/wholesale?SearchText=${encodeURIComponent(searchPhrase)}`;
 
 			await page.goto(searchUrl, {
 				waitUntil: "domcontentloaded",
 				timeout: 60000,
 			});
 
-			await this.delay(5000);
+			await this.delay(7000);
 
 			const url = page.url();
 			await browser.close();
 			return url;
 		} catch (error) {
 			await page
-				.screenshot({ path: "walmart-error-screenshot.png" })
+				.screenshot({ path: "aliexpress-error-screenshot.png" })
 				.catch(() => {});
 			await browser.close();
 			throw error;
@@ -149,7 +148,7 @@ export class WalmartCrawler implements IBaseCrawler {
 
 	private async scrapePage(
 		url: string,
-	): Promise<{ data: ScrapedWalmartProduct[]; nextPageUrl: string | null }> {
+	): Promise<{ data: ScrapedAliExpressProduct[]; nextPageUrl: string | null }> {
 		const browser = await this.openBrowser();
 		const page = await browser.newPage();
 
@@ -157,12 +156,12 @@ export class WalmartCrawler implements IBaseCrawler {
 			await page.setUserAgent(
 				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 			);
-			await page.setViewport({ width: 1920, height: 1080 });
 
 			await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
-			await this.delay(5000);
+			await this.delay(8000);
 
 			const data = await page.evaluate(() => {
+				// AliExpress uses various class names, try multiple selectors
 				const allDivs = [...document.querySelectorAll("div")] as HTMLElement[];
 
 				const productCards = allDivs.filter((div) => {
@@ -170,99 +169,96 @@ export class WalmartCrawler implements IBaseCrawler {
 					const hasLink = !!div.querySelector("a");
 					const hasPrice =
 						div.textContent?.includes("$") ||
+						div.textContent?.includes("US") ||
 						!!div.querySelector('[class*="price"]');
-					return hasImage && hasLink && hasPrice;
+					const hasMinHeight = div.offsetHeight > 100;
+					const hasMaxHeight = div.offsetHeight < 600; // Exclude large containers
+					return (
+						hasImage && hasLink && hasPrice && hasMinHeight && hasMaxHeight
+					);
 				});
-				// Track seen URLs to prevent duplicates
-				const seenUrls = new Set<string>();
 
 				return productCards
 					.map((card) => {
 						try {
-							// Extract link first to check for duplicates
-							const linkElement =
-								card.querySelector('a[href*="/ip/"]') ||
-								card.querySelector("a[href]");
-							const detailLink = linkElement?.getAttribute("href") || "";
-
-							// Skip if we've already seen this URL or if it's invalid
-							if (
-								!detailLink ||
-								detailLink === "N/A" ||
-								seenUrls.has(detailLink)
-							) {
-								return null;
-							}
-
-							seenUrls.add(detailLink);
-
+							// Extract title
 							let title = "";
 							const titleElement =
-								(card.querySelector(
-									'[data-automation-id="product-title"]',
-								) as HTMLElement) ||
-								(card.querySelector(
-									'span[data-automation-id="product-title"]',
-								) as HTMLElement) ||
-								(card.querySelector("a[href*='/ip/']") as HTMLElement);
+								(card.querySelector('[class*="title"]') as HTMLElement) ||
+								(card.querySelector("h1") as HTMLElement) ||
+								(card.querySelector("h3") as HTMLElement) ||
+								(card.querySelector("a") as HTMLElement);
 
 							if (titleElement) {
 								title = titleElement.innerText?.trim() || "";
 							}
 
-							if (!title) {
-								const links = card.querySelectorAll("a");
-								for (const link of links) {
-									const text = (link as HTMLElement).innerText?.trim();
-									if (text && text.length > 10) {
-										title = text;
-										break;
-									}
-								}
-							}
-
 							if (!title || title.length < 5) return null;
 
+							// Extract link
+							const linkElement = card.querySelector("a");
+							const detailLink = linkElement?.getAttribute("href") || "N/A";
+
+							// Extract image
 							const imageElement = card.querySelector(
 								"img",
 							) as HTMLImageElement;
 							const imageLink =
 								imageElement?.src ||
 								imageElement?.getAttribute("data-src") ||
+								imageElement?.getAttribute("src") ||
 								"N/A";
 
+							// Extract price
 							let price = "N/A";
 							const priceElements = card.querySelectorAll(
-								'[class*="price"], [data-automation-id*="price"]',
+								'[class*="price"], [class*="Price"]',
 							);
 							for (const el of priceElements) {
 								const text = (el as HTMLElement).innerText?.trim();
-								if (text && text.includes("$")) {
+								if (text && /\$?\s*\d+\.?\d*/.test(text)) {
 									price = text;
 									break;
 								}
 							}
 
+							// Extract rating
 							const ratingElement =
-								card.querySelector('[aria-label*="star"]') ||
-								card.querySelector('[class*="rating"]');
+								card.querySelector('[class*="rating"]') ||
+								card.querySelector('[class*="star"]');
 							const rating =
-								ratingElement?.getAttribute("aria-label") ||
-								(ratingElement as HTMLElement)?.innerText?.trim() ||
-								"N/A";
+								(ratingElement as HTMLElement)?.innerText?.trim() || "N/A";
 
-							const reviewElement = card.querySelector('[class*="review"]');
+							// Extract review count
+							const reviewElement =
+								card.querySelector('[class*="review"]') ||
+								card.querySelector('[class*="order"]');
 							const reviewCount =
 								(reviewElement as HTMLElement)?.innerText?.trim() || "N/A";
 
-							const isSponsored = card.textContent?.includes("Sponsored")
-								? "yes"
-								: "no";
-							const hasFreeShipping = card.textContent
+							// Extract supplier
+							const supplierElement = card.querySelector('[class*="store"]');
+							const supplier =
+								(supplierElement as HTMLElement)?.innerText?.trim() || "N/A";
+
+							// Extract MOQ (Minimum Order Quantity)
+							const moqElement = card.querySelector('[class*="moq"]');
+							const moq =
+								(moqElement as HTMLElement)?.innerText?.trim() || "N/A";
+
+							// Check for Trade Assurance
+							const hasTradeAssurance = card.textContent
 								?.toLowerCase()
-								.includes("free shipping")
+								.includes("trade assurance")
 								? "yes"
 								: "no";
+
+							// Check for Free Shipping
+							const hasFreeShipping =
+								card.textContent?.toLowerCase().includes("free shipping") ||
+								card.textContent?.toLowerCase().includes("free delivery")
+									? "yes"
+									: "no";
 
 							return {
 								title,
@@ -271,43 +267,56 @@ export class WalmartCrawler implements IBaseCrawler {
 								price,
 								rating,
 								reviewCount,
-								isSponsored,
+								supplier,
+								moq,
+								hasTradeAssurance,
 								hasFreeShipping,
 							};
 						} catch {
 							return null;
 						}
 					})
-					.filter(Boolean) as ScrapedWalmartProduct[];
+					.filter(Boolean) as ScrapedAliExpressProduct[];
+			});
+
+			// Deduplicate by URL (in case parent/child divs matched the same product)
+			const seenUrls = new Set<string>();
+			const uniqueData = data.filter((product) => {
+				if (seenUrls.has(product.detailPageUrl)) {
+					return false;
+				}
+				seenUrls.add(product.detailPageUrl);
+				return true;
 			});
 
 			const nextPageUrl = await page.evaluate(() => {
 				const nextBtn =
-					document.querySelector('a[aria-label="Next page"]') ||
-					document.querySelector('button[aria-label="Next page"]');
-				return nextBtn && !nextBtn.hasAttribute("aria-disabled")
+					document.querySelector('a[class*="next"]') ||
+					document.querySelector('button[class*="next"]') ||
+					document.querySelector('a[aria-label*="next"]');
+				return nextBtn && !nextBtn.hasAttribute("disabled")
 					? nextBtn.getAttribute("href")
 					: null;
 			});
 
 			await browser.close();
-			return { data, nextPageUrl };
+			return { data: uniqueData, nextPageUrl };
 		} catch (error) {
 			await page
-				.screenshot({ path: `walmart-error-page-${Date.now()}.png` })
+				.screenshot({ path: `aliexpress-error-page-${Date.now()}.png` })
 				.catch(() => {});
 			await browser.close();
 			throw error;
 		}
 	}
 
-	private transformProduct(raw: ScrapedWalmartProduct): CrawledProduct {
+	private transformProduct(raw: ScrapedAliExpressProduct): CrawledProduct {
 		const parsedPrice = this.parsePrice(raw.price);
 
 		// Debug logging for price parsing
 		if (raw.price !== "N/A" && !parsedPrice) {
 			console.warn(
-				`Walmart: Price parsing failed for "${raw.title}" - raw price: "${raw.price}"`,
+				`AliExpress: Price parsing failed for "${raw.title}" - raw price: "${raw.price}"`,
 			);
 		}
 
@@ -321,12 +330,14 @@ export class WalmartCrawler implements IBaseCrawler {
 				raw.detailPageUrl !== "N/A"
 					? raw.detailPageUrl.startsWith("http")
 						? raw.detailPageUrl
-						: `https://www.walmart.com${raw.detailPageUrl}`
+						: `https://www.aliexpress.com${raw.detailPageUrl}`
 					: undefined,
 			source: this.SOURCE,
 			rating: this.parseRating(raw.rating),
 			reviewCount: this.parseReviewCount(raw.reviewCount),
-			isSponsored: raw.isSponsored === "yes",
+			supplier: raw.supplier !== "N/A" ? raw.supplier : undefined,
+			moq: raw.moq !== "N/A" ? raw.moq : undefined,
+			hasTradeAssurance: raw.hasTradeAssurance === "yes",
 			hasFreeShipping: raw.hasFreeShipping === "yes",
 		};
 	}
@@ -335,10 +346,11 @@ export class WalmartCrawler implements IBaseCrawler {
 		if (!priceString || priceString === "N/A") return undefined;
 
 		// Remove currency symbols and text
+		// Handles formats like: "$299.99", "US $299.99", "€299.99", "$299.99 - $399.99"
 		const cleanedPrice = priceString
 			.replace(/[€£¥₹₩₽]/g, "")
-			.replace(/USD|EUR|GBP|JPY|AUD|CAD|CNY|INR|CHF|KRW|RUB/gi, "")
-			.replace(/to/gi, "")
+			.replace(/USD|EUR|GBP|JPY|AUD|CAD|CNY|INR|CHF|KRW|RUB|US/gi, "")
+			.replace(/to|-|–/gi, "")
 			.trim();
 
 		// Extract first valid price
@@ -347,7 +359,7 @@ export class WalmartCrawler implements IBaseCrawler {
 		);
 
 		if (!priceMatches || priceMatches.length === 0) {
-			console.warn(`Walmart: Failed to parse price from: "${priceString}"`);
+			console.warn(`AliExpress: Failed to parse price from: "${priceString}"`);
 			return undefined;
 		}
 
@@ -355,7 +367,7 @@ export class WalmartCrawler implements IBaseCrawler {
 
 		if (isNaN(parsedPrice) || parsedPrice <= 0) {
 			console.warn(
-				`Walmart: Invalid price parsed: "${priceString}" -> ${parsedPrice}`,
+				`AliExpress: Invalid price parsed: "${priceString}" -> ${parsedPrice}`,
 			);
 			return undefined;
 		}
@@ -365,7 +377,7 @@ export class WalmartCrawler implements IBaseCrawler {
 
 	private parseRating(ratingString: string): number | undefined {
 		if (!ratingString || ratingString === "N/A") return undefined;
-		const match = ratingString.match(/(\d+\.?\d*)\s+out\s+of/i);
+		const match = ratingString.match(/(\d+\.?\d*)/);
 		return match ? parseFloat(match[1]) : undefined;
 	}
 

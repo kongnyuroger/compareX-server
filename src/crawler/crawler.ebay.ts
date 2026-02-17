@@ -249,10 +249,19 @@ export class EbayCrawler implements IBaseCrawler {
 	}
 
 	private transformProduct(raw: ScrapedEbayProduct): CrawledProduct {
+		const parsedPrice = this.parsePrice(raw.price);
+
+		// Debug logging for price parsing
+		if (raw.price !== "N/A" && !parsedPrice) {
+			console.warn(
+				`eBay: Price parsing failed for "${raw.title}" - raw price: "${raw.price}"`,
+			);
+		}
+
 		return {
 			id: nanoid(),
 			title: raw.title,
-			price: this.parsePrice(raw.price),
+			price: parsedPrice,
 			currency: "USD",
 			imageUrl: raw.imageUrl !== "N/A" ? raw.imageUrl : undefined,
 			productUrl:
@@ -273,10 +282,33 @@ export class EbayCrawler implements IBaseCrawler {
 	private parsePrice(priceString: string): number | undefined {
 		if (!priceString || priceString === "N/A") return undefined;
 
-		const match = priceString.match(/[\d,]+\.?\d*/);
-		if (match) {
-			return parseFloat(match[0].replace(/,/g, ""));
+		// Remove currency symbols and text, keep only numbers, commas, and decimals
+		// Handles formats like: "$299.99", "US $299.99", "£299.99", "$299.99 to $399.99"
+		const cleanedPrice = priceString
+			.replace(/[€£¥₹₩₽]/g, "") // Remove currency symbols
+			.replace(/USD|EUR|GBP|JPY|AUD|CAD|CNY|INR|CHF|KRW|RUB|US/gi, "") // Remove currency codes
+			.replace(/to/gi, "") // Remove "to" from price ranges
+			.trim();
+
+		// Extract first valid price (handles ranges by taking the first price)
+		const priceMatches = cleanedPrice.match(
+			/\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?/g,
+		);
+
+		if (!priceMatches || priceMatches.length === 0) {
+			console.warn(`eBay: Failed to parse price from: "${priceString}"`);
+			return undefined;
 		}
-		return undefined;
+
+		const parsedPrice = parseFloat(priceMatches[0].replace(/,/g, ""));
+
+		if (isNaN(parsedPrice) || parsedPrice <= 0) {
+			console.warn(
+				`eBay: Invalid price parsed: "${priceString}" -> ${parsedPrice}`,
+			);
+			return undefined;
+		}
+
+		return parsedPrice;
 	}
 }

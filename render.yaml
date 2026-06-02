@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: comparex-server
+    runtime: docker
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: MONGO_URI
+        sync: false        # you'll fill this in the Render dashboard
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        value: 786@78@99!!98383%3256&2
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: SBR_WS_ENDPOINT
+        sync: false

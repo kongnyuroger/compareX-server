@@ -7,7 +7,7 @@ WORKDIR /app
 # Copy package files first (so Docker can cache this layer)
 COPY package*.json ./
 
-# Install ALL dependencies (including dev tools needed to build)
+# Install ALL dependencies (including dev tools needed to build) and disable husky
 RUN npm ci
 
 # Copy the rest of the source code
@@ -51,7 +51,7 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Copy package files and install ONLY production dependencies
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts
 
 # Copy the compiled code from the builder stage
 COPY --from=builder /app/dist ./dist

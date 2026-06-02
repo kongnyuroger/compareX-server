@@ -1,0 +1,28 @@
+# Dependencies — Railway/Docker will install these fresh
+node_modules
+
+# TypeScript source — we only need the compiled dist/ in production
+src
+
+# Test files
+test
+coverage
+
+# Local environment file — NEVER put this in Docker
+.env
+.env.*
+
+# Git history
+.git
+.gitignore
+
+# Editor config
+.vscode
+.idea
+
+# Build artifacts from local machine
+dist
+
+# Logs
+*.log
+npm-debug.log*

@@ -1,0 +1,12 @@
+[build]
+# Tell Railway to use our Dockerfile
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Health check — Railway will ping this to confirm the app is running
+healthcheckPath = "/"
+healthcheckTimeout = 60
+
+# Restart automatically if the app crashes
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

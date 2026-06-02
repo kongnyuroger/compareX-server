@@ -13,3 +13,11 @@ services:
         sync: false
       - key: CORS_ORIGIN
         sync: false
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        value: 786@78@99!!98383%3256&2
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: SBR_WS_ENDPOINT
+        sync: false

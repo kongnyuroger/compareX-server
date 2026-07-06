@@ -21,7 +21,7 @@
 		"prepare": "husky"
 	},
 	"dependencies": {
-		"@ai-sdk/openai": "^2.0.72",
+		"@ai-sdk/openai": "^2.0.79",
 		"@nestjs/common": "^11.1.9",
 		"@nestjs/config": "^4.0.2",
 		"@nestjs/core": "^11.1.9",
